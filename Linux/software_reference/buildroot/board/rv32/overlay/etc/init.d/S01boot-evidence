@@ -1,0 +1,9 @@
+#!/bin/sh
+[ "$1" = start ] || exit 0
+echo RV32_LINUX_COMMANDS_BEGIN
+uname -a
+cat /proc/cpuinfo
+cat /proc/meminfo
+ls /
+ps
+echo RV32_LINUX_COMMANDS_END

@@ -1,0 +1,36 @@
+{
+  "created_utc": "2026-11-03T08:56:40.669222+00:00",
+  "kind": "local_native_Tk_one_click_YOLO_console",
+  "files_sha256": {
+    "audit_live_display.py": "a8a046ab459b978851b58cf679736e4805b217e60d7760e344d9988d1ce3dc6f",
+    "continuous_session.py": "1bb85be1ec55c0711d10c6f5f0786266828b2cddbd8b90c720ddb4b9ca26e102",
+    "telemetry.py": "e9eb6b18719598cc2c17b7682f91700c46df300f09419066fac41fe13878363c",
+    "test_telemetry.py": "cfa300fc4aaa4a40911df8b50ca22de5016821deb8ec81237b210c3a956760f3",
+    "video_runner.py": "8f05e7ffaae1eee266f5a55c10401a6ffa1783d800bd453c32db49a24cb9663e",
+    "video_window.py": "47989c23636839be57ff0461d8b3ffd471f2417081fd27db0a9809a5300f0872",
+    "使用说明.txt": "56ef6256eafe590712ea8fd530e0690c9758c5b4fc973181a7cfd4a06f7fe3cf",
+    "打开YOLO识别展示窗口.cmd": "700cb383698ec4f2629c847912fee08c517bdc72d4a128f08bb1d1c4279fc99b"
+  },
+  "entrypoint": "D:/workspace/riscv-fpga-soc/打开YOLO识别展示窗口.cmd",
+  "GUI": "D:\\workspace\\riscv-fpga-soc\\work\\yolo_reviewed_board_20261103_01\\one_click_console\\video_window.py",
+  "native_bitstream": "D:/workspace/riscv-fpga-soc/build/yrev27_05/bitstream/project/prj_tasks/pnr_1/generate_bitstream/soc_board_camera_top.sbit",
+  "bitstream_sha256": "98d9f5f293812b1d7bf902429f0b8d862d5fcfe74ac141d03bdd34c120873cd0",
+  "firmware_build": "ed37c7c631dc7896",
+  "default_duration_seconds": null,
+  "pixel_loss_abort_ratio": 0.1,
+  "recognition_idle_timeout": null,
+  "live_status_reply_deadline": null,
+  "tests": {
+    "syntax": "PASS",
+    "payload_speed_direction_and_window": "PASS",
+    "600_second_live_wait_does_not_abort": "PASS",
+    "manual_pending_wait_cancel": "PASS",
+    "UI_offline_check": "PASS"
+  },
+  "physical_validation": "PASS_LIVE",
+  "GUI_process_id": 22500,
+  "active_evidence": "D:\\workspace\\riscv-fpga-soc\\work\\yolo_reviewed_board_20261103_01\\one_click_console\\logs\\20261103_165427_341321",
+  "source_engineering_root": "D:\\workspace\\riscv-fpga-soc\\work\\yolo_reviewed_board_20261103_01",
+  "scheduled_tasks_created": false,
+  "physical_evidence": "D:\\workspace\\riscv-fpga-soc\\work\\yolo_reviewed_board_20261103_01\\one_click_console\\logs\\20261103_165427_341321\\LIVE_DISPLAY_AUDIT.json"
+}

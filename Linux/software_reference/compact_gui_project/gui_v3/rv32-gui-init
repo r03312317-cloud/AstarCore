@@ -1,0 +1,29 @@
+#!/bin/sh
+# Start the real LVGL application and retain its diagnostics in /var/log.
+pidfile=/run/rv32-gui.pid
+fifo=/run/rv32-gui/commands
+is_gui() {
+  [ -r "$pidfile" ] || return 1
+  pid=$(cat "$pidfile")
+  case "$pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$pid/cmdline")" in
+    *'/usr/bin/rv32-gui '*) kill -0 "$pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+case "${1:-}" in
+ start)
+  mkdir -p /run/rv32-gui
+  chmod 700 /run/rv32-gui
+  if is_gui; then exit 0; fi
+  rm -f "$pidfile" "$fifo"
+  /usr/bin/rv32-gui --fb /dev/fb0 >>/var/log/rv32-gui.log 2>&1 </dev/null &
+  printf '%s\n' "$!" > "$pidfile"
+  ;;
+ stop)
+  if is_gui; then kill "$pid"; fi
+  rm -f "$pidfile"
+  ;;
+ *) echo "Usage: $0 {start|stop}"; exit 2;;
+esac

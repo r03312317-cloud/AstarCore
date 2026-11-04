@@ -1,0 +1,79 @@
+{
+  "name": "palm",
+  "frame_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\frame_1280x720_rgb565le.bin",
+  "frame_sha256": "5220f5dae2e8749de6881d9913eb61ea15ccd6fd32596c2de923f53720b679e4",
+  "frame_bytes": 1843200,
+  "input_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\input_320x320_hwc_i8_v1.bin",
+  "input_sha256": "ac6f7c1c5043cfc1f036ca62e0361f4221c1f3547a60f9733d272f67e5b4f742",
+  "input_bytes": 307200,
+  "display_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\display_640x360_rgb565le.bin",
+  "display_sha256": "57b0de8475c89fbd039a97a9eb8efc018f965e3b76c54a235f28d41d5344a982",
+  "display_bytes": 460800,
+  "heads": [
+    {
+      "name": "head_s8_logits",
+      "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\head_s8_logits_hwc_i8.bin",
+      "bytes": 52800,
+      "sha256": "c7375b52f30539e9c86c468076dac773bdc4b81a0a798f793b8ec1143d5e74a9"
+    },
+    {
+      "name": "head_s16_logits",
+      "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\head_s16_logits_hwc_i8.bin",
+      "bytes": 13200,
+      "sha256": "e156820c948a3ff27d8fca955723d07cdf8f5b126257e7618905931c73f87c13"
+    },
+    {
+      "name": "head_s32_logits",
+      "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\head_s32_logits_hwc_i8.bin",
+      "bytes": 3300,
+      "sha256": "cfa01286f8c90871986dc124589ed8712b19b42f01a27aee5456c274ee499bcf"
+    }
+  ],
+  "detections": [
+    {
+      "x1_q16": 8311142,
+      "y1_q16": 10277467,
+      "x2_q16": 9755418,
+      "y2_q16": 12075237,
+      "score_q15": 21286,
+      "class_id": 5,
+      "display_640x360_xyxy": [
+        253,
+        173,
+        298,
+        229
+      ],
+      "HDMI_1280x720_xyxy": [
+        506,
+        346,
+        596,
+        458
+      ]
+    }
+  ],
+  "selected_palm": {
+    "x1_q16": 8311142,
+    "y1_q16": 10277467,
+    "x2_q16": 9755418,
+    "y2_q16": 12075237,
+    "score_q15": 21286,
+    "class_id": 5,
+    "display_640x360_xyxy": [
+      253,
+      173,
+      298,
+      229
+    ],
+    "HDMI_1280x720_xyxy": [
+      506,
+      346,
+      596,
+      458
+    ]
+  },
+  "NMS_count": 1,
+  "candidate_count": 14,
+  "host_ORT_seconds": 0.046999999998661224,
+  "scope": "Host fixed image reference; no sensor, FPGA inference or panel result",
+  "V1_contract": "720p RGB565 -> 320x180 center-bilinear +70 top/bottom; signed INT8 RGB HWC"
+}

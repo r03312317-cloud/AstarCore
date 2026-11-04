@@ -1,0 +1,3 @@
+rv32 login:	root\n
+# 	uname -a; cat /proc/cpuinfo; cat /proc/meminfo; ls /; ps; ls -l /dev/fb0; echo ACTUAL_RTL_SHELL_COMMANDS_DONE\n
+# 	gui-command status; sleep 1; gui-command settings; sleep 1; gui-command home; echo ACTUAL_RTL_GUI_COMMANDS_SENT\n

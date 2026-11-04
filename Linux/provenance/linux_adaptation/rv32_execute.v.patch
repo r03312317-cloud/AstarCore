@@ -1,0 +1,31 @@
+--- Core01/rv32_execute.v
++++ Core01Linux/rv32_execute.v
+@@ -192,6 +192,20 @@
+                 address=control_address_sum; memory_size=sub[1:0]; memory_unsigned=sub[2];
+                 if(sub==3 || sub==6 || sub==7) illegal=1;
+             end
++            7'b0101111: begin
++                // RV32A requests are serialized by the core and completed by
++                // the post-translation atomic adapter, including LR/SC status.
++                uses_source1=1;uses_source2=instruction[31:27]!=5'b00010;
++                writes_destination=1;memory=1;memory_size=2;address=left;
++                memory_write=instruction[31:27]!=5'b00010;
++                if(sub!=2)illegal=1;
++                case(instruction[31:27])
++                    5'b00010:if(source2!=0)illegal=1;
++                    5'b00011,5'b00001,5'b00000,5'b00100,5'b01100,5'b01000,
++                    5'b10000,5'b10100,5'b11000,5'b11100:begin end
++                    default:illegal=1;
++                endcase
++            end
+             7'b0100011: begin
+                 uses_source1=1; uses_source2=1; memory=1; memory_write=1;
+                 address=control_address_sum; memory_size=sub[1:0];
+@@ -321,6 +335,7 @@
+                         32'h00000073:system_operation=3;
+                         32'h00100073:system_operation=4;
+                         32'h30200073:system_operation=2;
++                        32'h10200073:system_operation=7;
+                         32'h10500073:system_operation=5;
+                         default:begin
+                             if((instruction&32'hfe007fff)==32'h12000073) system_operation=1;

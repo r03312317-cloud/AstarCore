@@ -1,0 +1,139 @@
+{
+  "model_sha256": "97da0db6ca09dfc726b6bb41e93cc9a5c7f0f4690f46502d43eb467f803b8a52",
+  "firmware_sha256": "f3f8dc0b4f530af5b05cee72d2f858f1f6311214d197c007f31eed96cf0611f2",
+  "firmware_build_id": "eb1fbf30aa8f08e1",
+  "silu_check": {
+    "nodes": 57,
+    "mismatched_nodes": 0,
+    "differing_lut_entries": 0,
+    "rows": []
+  },
+  "source_C_sha256": {
+    "preprocess320_i8.c": "f0d3c6e9a6609300715f9239f1971d71cf2bdc8240edbf5bbdc6397158304e0d",
+    "display_cmos2.c": "09344dee26644110ca0aff5365516df1d6ac5fafa4d852c4228dae77ad344665",
+    "yolov5_postprocess.c": "8626b293540aebc87c2d9c9593dd351749b62a8075953f2b668b62c382e21b65",
+    "model_input_lut.h": "786e0410d830b28ef9275c0a23809cc1b5d7df0554c2fbf7fa7f660be8a1bc97"
+  },
+  "checker_scope": "Existing Windows checker native crash workaround, ORT surrogate validation and exact 57-LUT proof; not full ONNX checker acceptance",
+  "scope": "Host model heads/NMS/math and normal package compatibility only. No camera or board execution.",
+  "frames": [
+    {
+      "name": "palm",
+      "frame_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\frame_1280x720_rgb565le.bin",
+      "frame_sha256": "5220f5dae2e8749de6881d9913eb61ea15ccd6fd32596c2de923f53720b679e4",
+      "frame_bytes": 1843200,
+      "input_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\input_320x320_hwc_i8_v1.bin",
+      "input_sha256": "ac6f7c1c5043cfc1f036ca62e0361f4221c1f3547a60f9733d272f67e5b4f742",
+      "input_bytes": 307200,
+      "display_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\display_640x360_rgb565le.bin",
+      "display_sha256": "57b0de8475c89fbd039a97a9eb8efc018f965e3b76c54a235f28d41d5344a982",
+      "display_bytes": 460800,
+      "heads": [
+        {
+          "name": "head_s8_logits",
+          "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\head_s8_logits_hwc_i8.bin",
+          "bytes": 52800,
+          "sha256": "c7375b52f30539e9c86c468076dac773bdc4b81a0a798f793b8ec1143d5e74a9"
+        },
+        {
+          "name": "head_s16_logits",
+          "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\head_s16_logits_hwc_i8.bin",
+          "bytes": 13200,
+          "sha256": "e156820c948a3ff27d8fca955723d07cdf8f5b126257e7618905931c73f87c13"
+        },
+        {
+          "name": "head_s32_logits",
+          "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\palm\\head_s32_logits_hwc_i8.bin",
+          "bytes": 3300,
+          "sha256": "cfa01286f8c90871986dc124589ed8712b19b42f01a27aee5456c274ee499bcf"
+        }
+      ],
+      "detections": [
+        {
+          "x1_q16": 8311142,
+          "y1_q16": 10277467,
+          "x2_q16": 9755418,
+          "y2_q16": 12075237,
+          "score_q15": 21286,
+          "class_id": 5,
+          "display_640x360_xyxy": [
+            253,
+            173,
+            298,
+            229
+          ],
+          "HDMI_1280x720_xyxy": [
+            506,
+            346,
+            596,
+            458
+          ]
+        }
+      ],
+      "selected_palm": {
+        "x1_q16": 8311142,
+        "y1_q16": 10277467,
+        "x2_q16": 9755418,
+        "y2_q16": 12075237,
+        "score_q15": 21286,
+        "class_id": 5,
+        "display_640x360_xyxy": [
+          253,
+          173,
+          298,
+          229
+        ],
+        "HDMI_1280x720_xyxy": [
+          506,
+          346,
+          596,
+          458
+        ]
+      },
+      "NMS_count": 1,
+      "candidate_count": 14,
+      "host_ORT_seconds": 0.046999999998661224,
+      "scope": "Host fixed image reference; no sensor, FPGA inference or panel result",
+      "V1_contract": "720p RGB565 -> 320x180 center-bilinear +70 top/bottom; signed INT8 RGB HWC"
+    },
+    {
+      "name": "empty",
+      "frame_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\empty\\frame_1280x720_rgb565le.bin",
+      "frame_sha256": "55b046e5c2d43f2f340ae698da0e615fbe6e79f482187fb2e0e206a5ce00f769",
+      "frame_bytes": 1843200,
+      "input_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\empty\\input_320x320_hwc_i8_v1.bin",
+      "input_sha256": "89468cc2338f119244999476b25709033eddd1924d9a5c6388f5fc3b6e412d51",
+      "input_bytes": 307200,
+      "display_file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\empty\\display_640x360_rgb565le.bin",
+      "display_sha256": "7d2ae0b7c22da0114435713a3d6fc4beaee72dcde2996c4c1ae57b45a3c1b13f",
+      "display_bytes": 460800,
+      "heads": [
+        {
+          "name": "head_s8_logits",
+          "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\empty\\head_s8_logits_hwc_i8.bin",
+          "bytes": 52800,
+          "sha256": "eb8f50ef8c04da057111e377013bb41876eba7b19d47d239eabbda85add01ab9"
+        },
+        {
+          "name": "head_s16_logits",
+          "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\empty\\head_s16_logits_hwc_i8.bin",
+          "bytes": 13200,
+          "sha256": "e0a9952091e69a4044969753d29bfa5b5d6c058fed893f4e96ce5f7a2815e10f"
+        },
+        {
+          "name": "head_s32_logits",
+          "file": "D:\\workspace\\riscv-fpga-soc\\model\\cmos2_concat_diag_eb1fbf30aa8f08e1_v1_20261003\\empty\\head_s32_logits_hwc_i8.bin",
+          "bytes": 3300,
+          "sha256": "7a87848b26eec82ca53bc563fd7627daad3dfdaa24b5771f6442211655e51cf1"
+        }
+      ],
+      "detections": [],
+      "selected_palm": null,
+      "NMS_count": 0,
+      "candidate_count": 0,
+      "host_ORT_seconds": 0.046999999998661224,
+      "scope": "Host fixed image reference; no sensor, FPGA inference or panel result",
+      "V1_contract": "720p RGB565 -> 320x180 center-bilinear +70 top/bottom; signed INT8 RGB HWC"
+    }
+  ]
+}

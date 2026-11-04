@@ -1,0 +1,11 @@
+--- original/cmos2_workflow.h
++++ runtime_policy/cmos2_workflow.h
+@@ -465,7 +465,7 @@
+         }
+         /* V2 prefetch failure can leave an IMG lease in flight: only the
+          * single-frame mode has the existing safe completed-capture retry. */
+-        if(cmos2_session[1]!=1u || image_async_owned || image_timeout_latched ||
++        if(live_preview.fault || cmos2_session[1]!=1u || image_async_owned || image_timeout_latched ||
+            !soc_cmos2_capture_can_resume(cmos2_last_status,get32(cmos2_last_reply+8u),
+                   R32(CAMERA+8u),R32(0x50000004u),R32(NPU+0x0cu))) {
+             cmos2_fatal++;cmos2_continuous=0u;return;

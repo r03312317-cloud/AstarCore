@@ -1,0 +1,24 @@
+#!/bin/sh
+# 此脚本保留本工程使用的原始启动或构建流程，具体路径和参数没有在注释版中改变。
+
+# In case we have a slow-to-appear interface (e.g. eth-over-USB),
+# and we need to configure it, wait until it appears, but not too
+# long either. IF_WAIT_DELAY is in seconds.
+
+if [ "${IF_WAIT_DELAY}" -a ! -e "/sys/class/net/${IFACE}" ]; then
+    printf "Waiting for interface %s to appear" "${IFACE}"
+    while [ ${IF_WAIT_DELAY} -gt 0 ]; do
+        if [ -e "/sys/class/net/${IFACE}" ]; then
+            printf "\n"
+            # 此处按原脚本结束该执行分支，后续代码是否可达需结合外层条件判断。
+            exit 0
+        fi
+        # 普通进程在本循环中让出 CPU，约一秒后继续；这不是系统定时任务注册。
+        sleep 1
+        printf "."
+        : $((IF_WAIT_DELAY -= 1))
+    done
+    printf " timeout!\n"
+    exit 1
+fi
+

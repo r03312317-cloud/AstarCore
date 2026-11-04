@@ -1,0 +1,100 @@
+# Actual 125 MHz reference and 130 MHz GPLL; no core path exceptions.
+create_clock -name ref_clk -period 8.000 -waveform {0 4.000} [get_ports clk_p]
+set_clock_uncertainty 0.1 [get_clocks ref_clk]
+create_generated_clock -name cpu_clk -source [get_ports clk_p] [get_pins u_cpu_pll/clkout0] -master_clock [get_clocks ref_clk] -multiply_by 26 -divide_by 25
+set_clock_uncertainty 0.1 [get_clocks cpu_clk]
+# External active-low reset enters only the asynchronous-assert reset chain.
+set_false_path -from [get_ports rst_in]
+# UART is asynchronous to the receiver; bound its fabric-to-pin path.
+set_max_delay 10.0 -datapath_only -from [get_clocks cpu_clk] -to [get_ports uart_tx]
+set_min_delay 0.0 -from [get_clocks cpu_clk] -to [get_ports uart_tx]
+# LEDs have no external sampling clock. Bound physical fabric-to-pin delay;
+# CPU register-to-register paths retain the full 130 MHz setup/hold checks.
+set_max_delay 10.0 -datapath_only -from [get_clocks cpu_clk] -to [get_ports {led[*]}]
+set_min_delay 0.0 -from [get_clocks cpu_clk] -to [get_ports {led[*]}]
+define_attribute {p:clk_n} {PAP_IO_DIRECTION} {INPUT}
+define_attribute {p:clk_n} {PAP_IO_LOC} {N2}
+define_attribute {p:clk_n} {PAP_IO_NONE} {TRUE}
+define_attribute {p:clk_n} {PAP_IO_STANDARD} {HSTL15D_I}
+define_attribute {p:clk_n} {PAP_IO_VCCIO} {1.5}
+define_attribute {p:clk_p} {PAP_IO_DIRECTION} {INPUT}
+define_attribute {p:clk_p} {PAP_IO_LOC} {N3}
+define_attribute {p:clk_p} {PAP_IO_NONE} {TRUE}
+define_attribute {p:clk_p} {PAP_IO_STANDARD} {HSTL15D_I}
+define_attribute {p:clk_p} {PAP_IO_VCCIO} {1.5}
+define_attribute {p:led[0]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[0]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[0]} {PAP_IO_LOC} {A20}
+define_attribute {p:led[0]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[0]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[0]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[0]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:led[1]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[1]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[1]} {PAP_IO_LOC} {C18}
+define_attribute {p:led[1]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[1]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[1]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[1]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:led[2]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[2]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[2]} {PAP_IO_LOC} {C19}
+define_attribute {p:led[2]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[2]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[2]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[2]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:led[3]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[3]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[3]} {PAP_IO_LOC} {E18}
+define_attribute {p:led[3]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[3]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[3]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[3]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:led[4]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[4]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[4]} {PAP_IO_LOC} {A17}
+define_attribute {p:led[4]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[4]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[4]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[4]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:led[5]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[5]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[5]} {PAP_IO_LOC} {A18}
+define_attribute {p:led[5]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[5]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[5]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[5]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:led[6]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[6]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[6]} {PAP_IO_LOC} {C17}
+define_attribute {p:led[6]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[6]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[6]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[6]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:led[7]} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:led[7]} {PAP_IO_DRIVE} {8}
+define_attribute {p:led[7]} {PAP_IO_LOC} {B17}
+define_attribute {p:led[7]} {PAP_IO_NONE} {TRUE}
+define_attribute {p:led[7]} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:led[7]} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:led[7]} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:rst_in} {PAP_IO_DIRECTION} {INPUT}
+define_attribute {p:rst_in} {PAP_IO_LOC} {C22}
+define_attribute {p:rst_in} {PAP_IO_NONE} {TRUE}
+define_attribute {p:rst_in} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:rst_in} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:uart_tx} {PAP_IO_DIRECTION} {OUTPUT}
+define_attribute {p:uart_tx} {PAP_IO_DRIVE} {8}
+define_attribute {p:uart_tx} {PAP_IO_LOC} {C24}
+define_attribute {p:uart_tx} {PAP_IO_NONE} {TRUE}
+define_attribute {p:uart_tx} {PAP_IO_SLEW} {SLOW}
+define_attribute {p:uart_tx} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:uart_tx} {PAP_IO_VCCIO} {3.3}
+define_attribute {p:uart_rx} {PAP_IO_DIRECTION} {INPUT}
+define_attribute {p:uart_rx} {PAP_IO_LOC} {B24}
+define_attribute {p:uart_rx} {PAP_IO_NONE} {TRUE}
+define_attribute {p:uart_rx} {PAP_IO_STANDARD} {LVCMOS33}
+define_attribute {p:uart_rx} {PAP_IO_VCCIO} {3.3}
+
+# Asynchronous UART input ends at the first receiver synchronizer.
+set_false_path -from [get_ports uart_rx]

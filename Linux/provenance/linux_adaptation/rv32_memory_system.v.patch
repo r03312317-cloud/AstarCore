@@ -1,0 +1,25 @@
+--- Core01/rv32_memory_system.v
++++ Core01Linux/rv32_memory_system.v
+@@ -9,6 +9,7 @@
+ // segments are 64 bits. Cache data/tag arrays are not reset;
+ // deterministic valid/dirty bits prevent uninitialized contents being observed.
+ module rv32_memory_system #(
++    parameter LINUX_PHYSICAL_MAP = 0,
+     parameter I_INDEX_BITS = 7,
+     parameter I_WAYS = 2,
+     parameter D_INDEX_BITS = 6,
+@@ -236,12 +237,12 @@
+ 
+     function executable;
+         input [31:0] address;
+-        begin executable = (address[31:28]==4'h1 || address[31:28]==4'h8); end
++        begin executable = LINUX_PHYSICAL_MAP ? (address>=DATA_RAM_BASE && address<=DATA_RAM_LIMIT) : (address[31:28]==4'h1 || address[31:28]==4'h8); end
+     endfunction
+     function peripheral;
+         input [31:0] address;
+         begin
+-            peripheral = ((address >= 32'h30000000 && address < 32'h80000000) ||
++            peripheral = LINUX_PHYSICAL_MAP ? !(address>=DATA_RAM_BASE && address<=DATA_RAM_LIMIT) : ((address >= 32'h30000000 && address < 32'h80000000) ||
+                           (address >= 32'h80000000 && address < 32'h84000000));
+         end
+     endfunction

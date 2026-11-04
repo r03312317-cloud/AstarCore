@@ -1,0 +1,11 @@
+#!/bin/sh
+# 从当前 Linux 的运行接口采集启动证据，保留版本和系统身份的真实来源。
+# 这些内容在板上 Linux 执行，主机控制台只呈现收到的串口输出。
+[ "$1" = start ] || exit 0
+echo RV32_LINUX_COMMANDS_BEGIN
+uname -a
+cat /proc/cpuinfo
+cat /proc/meminfo
+ls /
+ps
+echo RV32_LINUX_COMMANDS_END

@@ -1,0 +1,41 @@
+{
+  "schema": "soc-video-profile-v1",
+  "raw_capture": {
+    "width": 1280,
+    "height": 720
+  },
+  "preprocess": {
+    "width": 320,
+    "height": 320
+  },
+  "framebuffer_rgb565": {
+    "width": 680,
+    "height": 340,
+    "bytes": 462400
+  },
+  "carrier": {
+    "name": "CTA VIC 2/3 480p",
+    "width": 720,
+    "height": 480,
+    "h_front_porch": 16,
+    "h_sync": 62,
+    "h_back_porch": 60,
+    "h_total": 858,
+    "v_front_porch": 9,
+    "v_sync": 6,
+    "v_back_porch": 30,
+    "v_total": 525,
+    "hsync_polarity": "negative",
+    "vsync_polarity": "negative",
+    "pixel_hz": 27000000,
+    "serial_hz": 135000000,
+    "frame_hz": 59.94005994005994,
+    "image_x": 20,
+    "image_y": 70
+  },
+  "cpu_hz": 70000000,
+  "npu_hz": 100000000,
+  "ddr_ui_hz": 93750000,
+  "bank_l5_volts": 2.5,
+  "fpga_display_physical_validation": "pending"
+}

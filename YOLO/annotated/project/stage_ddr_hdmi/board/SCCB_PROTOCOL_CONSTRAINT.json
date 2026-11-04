@@ -1,0 +1,31 @@
+{
+  "type": "SOURCE_DERIVED_SCCB_PAD_BUDGET",
+  "boot": {
+    "source": "board/vendor_ov5640/SCCB.v",
+    "SYS_CLK": 27000000,
+    "SCCB_CLK": 250000,
+    "counter_period": 108,
+    "quarter_counter_interval": 27,
+    "minimum_nominal_quarter_interval_ns": 1000
+  },
+  "manual": {
+    "source": "project/firmware_displayready_src/camera_sccb_readback.h",
+    "SCB_DELAY_expression": "HZ/100000",
+    "minimum_delay_after_every_control_write_ns": 10000,
+    "open_drain": true,
+    "return_levels_two_UI_synchronizers": true
+  },
+  "constraints": {
+    "pins": ["SCL_0", "SDA_0", "SCL_1", "SDA_1"],
+    "old_problem": "5ns sys_clk output delay incorrectly made external SCCB pads targets of the 10.666ns UI-to-sys synchronizer exception; tighter intersection won over the explicit 1000ns pin budget.",
+    "protocol_virtual_reference_period_ns": 2000,
+    "register_to_pad_max_delay_ns": 500,
+    "register_to_pad_min_delay_ns": 0,
+    "drivers_constrained": ["sys_clk", "ddrphy_sysclk"],
+    "internal_CDC_exceptions_unchanged": true,
+    "cam_reset_output_constraints_unchanged": true,
+    "input_return_constraints_unchanged": true,
+    "new_false_paths": 0
+  },
+  "scope": "Digital register-to-pad bound derived from existing boot and CPU protocol intervals. Does not measure cable/pull-up rise time, certify physical receiver setup/hold, or qualify all external board I/O. New PDS and real SCCB/camera acceptance remain required."
+}

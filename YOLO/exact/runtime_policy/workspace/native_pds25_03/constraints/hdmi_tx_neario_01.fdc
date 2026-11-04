@@ -1,0 +1,2 @@
+define_global_attribute {PAP_REGION} {region_tx(0,60,105,125)[CLMA,CLMS];}
+define_attribute {i:u_hdmi_tx.u_tx} {PAP_REGION} {region_tx}

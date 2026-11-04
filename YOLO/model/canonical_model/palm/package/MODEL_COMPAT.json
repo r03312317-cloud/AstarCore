@@ -1,0 +1,12 @@
+{
+  "type": "NORMAL_MODEL_REPACK_NOT_BOARD_VALIDATED",
+  "pass_result": true,
+  "firmware_build_id": "eb1fbf30aa8f08e1",
+  "firmware_manifest_sha256": "f3f8dc0b4f530af5b05cee72d2f858f1f6311214d197c007f31eed96cf0611f2",
+  "model_sha256": "97da0db6ca09dfc726b6bb41e93cc9a5c7f0f4690f46502d43eb467f803b8a52",
+  "frame_reference_sha256": "85474ebdc020aa473a5747558ef50b5d7498790c50a090046ecd701ab193e5b2",
+  "input_sha256": "ac6f7c1c5043cfc1f036ca62e0361f4221c1f3547a60f9733d272f67e5b4f742",
+  "descriptors": 204,
+  "unchanged_weights_and_layout": true,
+  "scope": "V1 host reference and normal build binding only; no board acceptance"
+}

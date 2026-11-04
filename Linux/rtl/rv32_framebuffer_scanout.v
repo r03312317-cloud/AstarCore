@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: MIT
+// Generic 720p raster + bounded two-line RGB565 DMA reader. One clock domain.
+// No DDR controller, PHY, TMDS encoder or serializer is implied by this module.
+// Memory accepts exactly one 32-bit read, responds valid/ready with data/error.
+// 参考扫描器根据 framebuffer 地址读取 RGB565 数据并产生显示像素。
+// 像素时序固定推进，内存响应可能背压，缓冲不足与访问错误需要独立记录。
+// 当前实板实际使用 128 位板级扫描器，本文件保留为 SoC 仿真与参考路径。
+// 参考模块默认分辨率不应覆盖板级 320 乘 180 ROI 的实际配置。
+module rv32_framebuffer_scanout #(
+ parameter [31:0] REGION_BASE=32'h83f00000, REGION_LIMIT=32'h84000000,
+ parameter H_ACTIVE=1280,H_FRONT=110,H_SYNC=40,H_BACK=220,
+ parameter V_ACTIVE=720,V_FRONT=5,V_SYNC=5,V_BACK=20
+)(
+ // active_enable 保存功能或输出使能，控制资格而非实际吞吐测量值。
+ input clk,reset,input [31:0] active_base,input active_enable,
+ output vblank,output de,hsync,vsync,output [15:0] pixel_rgb565,
+ output [11:0] pixel_x,output [10:0] pixel_y,
+ // mem_req_valid 保存有效资格，标识该项是否属于当前仍可使用的事务。
+ output mem_req_valid,input mem_req_ready,output [31:0] mem_req_addr,
+ // mem_rsp_valid 保存有效资格，标识该项是否属于当前仍可使用的事务。
+ input mem_rsp_valid,output mem_rsp_ready,input [31:0] mem_rsp_data,input mem_rsp_error,
+ // frame_count 保存占用数量或事件数量，不能由某个槽位的旧 payload 推断。
+ output reg [31:0] frame_count,underflow_rows,dma_errors,bounds_errors
+);
+ // HTOTAL 按 H_ACTIVE+H_FRONT+H_SYNC+H_BACK 计算，运算位宽与有无符号以原声明和显式扩展为准。
+ localparam HTOTAL=H_ACTIVE+H_FRONT+H_SYNC+H_BACK;
+ // VTOTAL 按 V_ACTIVE+V_FRONT+V_SYNC+V_BACK 计算，运算位宽与有无符号以原声明和显式扩展为准。
+ localparam VTOTAL=V_ACTIVE+V_FRONT+V_SYNC+V_BACK;
+ // SRC_WIDTH 按 H_ACTIVE/2,SRC_HEIGHT=V_ACTIVE/2,WORDS=SRC_WIDTH/2 计算，运算位宽与有无符号以原声明和显式扩展为准。
+ localparam SRC_WIDTH=H_ACTIVE/2,SRC_HEIGHT=V_ACTIVE/2,WORDS=SRC_WIDTH/2;
+ // WIDX 按 (WORDS<=1) 进行来源选择。
+ // 真分支取 1；其余情况取 $clog2(WORDS)。
+ localparam WIDX=(WORDS<=1)?1:$clog2(WORDS);
+ // FRAME_BYTES 按 SRC_WIDTH*SRC_HEIGHT*2 计算，运算位宽与有无符号以原声明和显式扩展为准。
+ localparam FRAME_BYTES=SRC_WIDTH*SRC_HEIGHT*2;
+ reg [11:0] hx;reg [10:0] vy;
+ reg [31:0] line0[0:WORDS-1],line1[0:WORDS-1];
+ // line_ready 保存接收或操作数就绪资格，须结合对应的有效位使用。
+ reg [1:0] line_ready,line_bad;reg [9:0] tag0,tag1;
+ reg row_ok,enabled;
+ reg [31:0] frame_base;
+ reg [9:0] fill_y,fill_word;
+ reg fill_bad;
+ // state 保存协议或执行状态，决定本周期允许的阶段与握手动作。
+ reg [1:0] state;reg request_stale,request_bank;
+ reg [9:0] request_word,request_y;reg [31:0] request_address;
+ // frame_latch 的资格组合为 (vy==V_ACTIVE)&&(hx==1)。
+ // 逻辑与要求相关条件同时成立；逻辑或汇总可接受的替代条件。
+ wire frame_latch=(vy==V_ACTIVE)&&(hx==1);
+ // base_ok 的资格组合为 (active_base[5:0]==0)&&(active_base>=REGION_BASE)&& ({1'b0,active_base}+FRAME_BYTES<={1'b0,REGION_LIMIT})。
+ wire base_ok=(active_base[5:0]==0)&&(active_base>=REGION_BASE)&&
+  ({1'b0,active_base}+FRAME_BYTES<={1'b0,REGION_LIMIT});
+ // source_y 读取 vy[10:1] 所选位域；位索引按声明中的高低位顺序解释。
+ wire [9:0] source_y=vy[10:1];wire bank=source_y[0];
+ // Registered memory read ports permit block-RAM mapping; all video metadata
+ // is delayed identically by one pixel clock. Physical mapping still needs PDS.
+ reg [31:0] read0,read1;reg pixel_bank,pixel_half,pixel_ok;
+ reg [11:0] out_x;reg [10:0] out_y;
+ // pixel_word 按 pixel_bank 进行来源选择。
+ // 真分支取 read1；其余情况取 read0。
+ wire [31:0] pixel_word=pixel_bank?read1:read0;
+ // pixel_rgb565 按 de&&pixel_ok 进行来源选择。
+ // 真分支取 (pixel_half?pixel_word[31:16]:pixel_word[15:0])；其余情况取 16'd0。
+ assign pixel_rgb565=de&&pixel_ok?(pixel_half?pixel_word[31:16]:pixel_word[15:0]):16'd0;
+ // de 的资格组合为 (out_x<H_ACTIVE)&&(out_y<V_ACTIVE)。
+ assign de=(out_x<H_ACTIVE)&&(out_y<V_ACTIVE);
+ // hsync 的资格组合为 (out_x>=H_ACTIVE+H_FRONT)&&(out_x<H_ACTIVE+H_FRONT+H_SYNC)。
+ assign hsync=(out_x>=H_ACTIVE+H_FRONT)&&(out_x<H_ACTIVE+H_FRONT+H_SYNC);
+ assign vsync=(out_y>=V_ACTIVE+V_FRONT)&&(out_y<V_ACTIVE+V_FRONT+V_SYNC);
+ assign pixel_x=out_x;assign pixel_y=out_y;
+ always @(posedge clk)begin
+  read0<=line0[hx[WIDX+1:2]];read1<=line1[hx[WIDX+1:2]];
+  // 复位分支建立下列状态的初始值；其后的正常更新分支在复位不成立时才执行。
+  if(reset)begin out_x<=0;out_y<=V_ACTIVE;pixel_bank<=0;pixel_half<=0;pixel_ok<=0;end
+  else begin out_x<=hx;out_y<=vy;pixel_bank<=bank;pixel_half<=hx[1];pixel_ok<=enabled&&row_ok;end
+ end
+ assign vblank=(vy==V_ACTIVE)&&(hx==0);
+ assign mem_req_valid=(state==1);assign mem_req_addr=request_address;
+ assign mem_rsp_ready=(state==2);
+ // next_v 按 (vy==VTOTAL-1) 进行来源选择。
+ // 真分支取 11'd0；其余情况取 vy+1'b1。
+ wire [10:0] next_v=(vy==VTOTAL-1)?11'd0:vy+1'b1;
+ // next_sy 读取 next_v[10:1] 所选位域；位索引按声明中的高低位顺序解释。
+ wire [9:0] next_sy=next_v[10:1];
+ // next_row_ready 保存接收或操作数就绪资格，须结合对应的有效位使用。
+ // next_row_ready 按 next_sy[0] 进行来源选择。
+ // 真分支取 (line_ready[1]&&!line_bad[1]&&tag1==next_sy)；其余情况取 (line_ready[0]&&!line_bad[0]&&tag0==next_sy)。
+ wire next_row_ready=next_sy[0]?(line_ready[1]&&!line_bad[1]&&tag1==next_sy):(line_ready[0]&&!line_bad[0]&&tag0==next_sy);
+ always @(posedge clk)begin
+  if(reset)begin
+   hx<=0;vy<=V_ACTIVE;frame_count<=0;underflow_rows<=0;dma_errors<=0;bounds_errors<=0;
+   line_ready<=0;line_bad<=0;tag0<=0;tag1<=0;row_ok<=0;enabled<=0;frame_base<=REGION_BASE;
+   fill_y<=0;fill_word<=0;fill_bad<=0;state<=0;request_stale<=0;request_bank<=0;request_word<=0;request_y<=0;request_address<=REGION_BASE;
+  end else begin
+   if(hx==HTOTAL-1)begin
+    hx<=0;vy<=next_v;
+    if(vy==VTOTAL-1)frame_count<=frame_count+1'b1;
+    if(next_v<V_ACTIVE&&!next_v[0])row_ok<=next_row_ready;
+   end else hx<=hx+1'b1;
+   if(hx==0&&vy<V_ACTIVE&&!vy[0]&&enabled&&!row_ok)underflow_rows<=underflow_rows+1'b1;
+   if(hx==H_ACTIVE-1&&vy<V_ACTIVE&&vy[0])line_ready[bank]<=0;
+   if(state==0&&!frame_latch&&enabled&&fill_y<SRC_HEIGHT&&!line_ready[fill_y[0]])begin
+    request_address<=frame_base+fill_y*(SRC_WIDTH*2)+fill_word*4;
+    request_stale<=0;request_bank<=fill_y[0];request_word<=fill_word;request_y<=fill_y;state<=1;
+   end
+   if(state==1&&mem_req_ready)state<=2;
+   if(state==2&&mem_rsp_valid)begin
+    state<=0;
+    if(!request_stale&&!frame_latch)begin
+     if(request_bank)line1[request_word[WIDX-1:0]]<=mem_rsp_error?32'd0:mem_rsp_data;
+     else line0[request_word[WIDX-1:0]]<=mem_rsp_error?32'd0:mem_rsp_data;
+     if(mem_rsp_error)begin dma_errors<=dma_errors+1'b1;fill_bad<=1;end
+     if({22'd0,request_word}==WORDS-1)begin
+      line_ready[request_bank]<=1;line_bad[request_bank]<=fill_bad||mem_rsp_error;
+      if(request_bank)tag1<=request_y;else tag0<=request_y;
+      fill_y<=fill_y+1'b1;fill_word<=0;fill_bad<=0;
+     end else fill_word<=fill_word+1'b1;
+    end
+   end
+   // Keep an already presented memory request stable; drain its stale response.
+   // All line ownership and next requests switch epoch atomically at vblank+1.
+   if(frame_latch)begin
+    request_stale<=1;frame_base<=active_base;enabled<=active_enable&&base_ok;
+    line_ready<=0;line_bad<=0;fill_y<=0;fill_word<=0;fill_bad<=0;row_ok<=0;
+    if(active_enable&&!base_ok)bounds_errors<=bounds_errors+1'b1;
+   end
+  end
+ end
+endmodule

@@ -1,0 +1,12 @@
+#!/bin/sh
+case "$1" in
+ start)
+  [ -c /dev/fb0 ] || { echo "RV32: /dev/fb0 unavailable; retaining shell"; exit 0; }
+  mkdir -p /run/rv32-gui
+  chmod 700 /run/rv32-gui
+  start-stop-daemon -S -b -m -p /run/rv32-gui.pid -x /usr/bin/rv32-gui -- --fb /dev/fb0 >>/var/log/rv32-gui.log 2>&1
+  ;;
+ stop) start-stop-daemon -K -p /run/rv32-gui.pid ;;
+ restart) "$0" stop; "$0" start ;;
+ *) echo "Usage: $0 {start|stop|restart}"; exit 1 ;;
+esac

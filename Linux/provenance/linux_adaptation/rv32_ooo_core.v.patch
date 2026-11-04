@@ -1,0 +1,648 @@
+--- Core01/rv32_ooo_core.v
++++ Core01Linux/rv32_ooo_core.v
+@@ -63,15 +63,22 @@
+     output [31:0] imem_request_address,
+     input imem_response_valid, output imem_response_ready,
+     input [63:0] imem_response_data, input [1:0] imem_response_error,
++    input [1:0] imem_response_page_fault,
+     output dmem_request_valid, input dmem_request_ready,
+     output [31:0] dmem_request_address,
+     output dmem_request_write,
++    output dmem_request_is_atomic, output [4:0] dmem_request_atomic,
+     output [1:0] dmem_request_size,
+     output [31:0] dmem_request_wdata,
+     output [3:0] dmem_request_wstrb,
+     input dmem_response_valid, output dmem_response_ready,
+     input [31:0] dmem_response_rdata, input dmem_response_error,
+-    input irq_software, irq_timer, irq_external,
++    input dmem_response_page_fault,
++    output [1:0] privilege_mode, output [31:0] mmu_satp,
++    output mmu_sum,mmu_mxr,mmu_mprv, output [1:0] mmu_mpp,
++    output mmu_sfence,
++    output [31:0] debug_mepc,debug_mcause,debug_mtval,debug_sepc,debug_scause,debug_stval,debug_architectural_pc,
++    input irq_software, irq_timer, irq_external, irq_supervisor_external,
+     input [63:0] mtime,
+     input event_icache_refill,event_dcache_refill,event_dcache_writeback,
+     output reg fence_i, fence_d,
+@@ -166,6 +173,19 @@
+     output [31:0] debug_ex_pc0,debug_ex_pc1,
+     output [31:0] debug_second_next,debug_second_prediction
+ );
++    // Single hart, M/S/U privileged state. All changes are precise retirement events.
++    reg [1:0] current_privilege;
++    reg [31:0] csr_svector,csr_sscratch,csr_sepc,csr_scause,csr_stval,csr_satp;
++    reg [31:0] csr_medeleg,csr_mideleg,csr_mcounteren,csr_scounteren,csr_pending;
++    localparam [31:0] STATUS_MASK=32'h007e19aa, SSTATUS_MASK=32'h000c0122;
++    assign debug_mepc=csr_exception_pc;assign debug_mcause=csr_cause;assign debug_mtval=csr_trap_value;
++    assign debug_sepc=csr_sepc;assign debug_scause=csr_scause;assign debug_stval=csr_stval;assign debug_architectural_pc=architectural_pc;
++    assign privilege_mode=current_privilege;
++    assign mmu_satp=csr_satp;
++    assign mmu_sum=csr_status[18]; assign mmu_mxr=csr_status[19];
++    assign mmu_mprv=csr_status[17]; assign mmu_mpp=csr_status[12:11];
++    assign mmu_sfence=retire0 && ((read_rob_instruction(rob_head)&32'hfe007fff)==32'h12000073);
++    wire data_response_fault=dmem_response_error || dmem_response_page_fault;
+     reg [31:0] csr_status, csr_interrupt_enable, csr_vector, csr_scratch;
+     reg [31:0] csr_exception_pc, csr_cause, csr_trap_value;
+     reg [2:0] event_selector [0:3];
+@@ -183,20 +203,51 @@
+             (event_selector[counter_event_row]==3&&event_dcache_writeback)||
+             (event_selector[counter_event_row]==4&&debug_branch_miss);
+     end endgenerate
+-    wire [31:0] interrupt_bits={20'b0,irq_external,3'b0,irq_timer,3'b0,irq_software,3'b0};
+-    wire interrupt_pending=csr_status[3] && |(interrupt_bits & csr_interrupt_enable);
+-    wire [31:0] interrupt_cause=(irq_external && csr_interrupt_enable[11])?32'h8000000b:
+-                                (irq_software && csr_interrupt_enable[3])?32'h80000003:32'h80000007;
++    wire [31:0] interrupt_bits={20'b0,irq_external,1'b0,irq_supervisor_external,1'b0,irq_timer,3'b0,irq_software,3'b0}|csr_pending;
++    wire [31:0] enabled_interrupts=interrupt_bits & csr_interrupt_enable;
++    wire [31:0] eligible_machine=enabled_interrupts & ~csr_mideleg & {32{current_privilege<3 || csr_status[3]}};
++    wire [31:0] eligible_supervisor=enabled_interrupts & csr_mideleg & {32{current_privilege<1 || (current_privilege==1 && csr_status[1])}};
++    wire [31:0] eligible_interrupts=eligible_machine|eligible_supervisor;
++    wire interrupt_pending=|eligible_interrupts;
++    wire [31:0] interrupt_cause=eligible_interrupts[11]?32'h8000000b:
++        eligible_interrupts[3]?32'h80000003:eligible_interrupts[7]?32'h80000007:
++        eligible_interrupts[9]?32'h80000009:eligible_interrupts[1]?32'h80000001:32'h80000005;
++    function [31:0] trap_target;
++        input [31:0] cause;
++        reg delegated; reg [31:0] vector;
++        begin
++            delegated=current_privilege!=3 && (cause[31]?csr_mideleg[cause[4:0]]:csr_medeleg[cause[4:0]]);
++            vector=delegated?csr_svector:csr_vector;
++            trap_target={vector[31:2],2'b0}+((cause[31]&&vector[1:0]==1)?{25'b0,cause[4:0],2'b0}:32'b0);
++        end
++    endfunction
+     reg [31:0] architectural_pc;
+     function [31:0] read_csr;
+         input [11:0] number;
+         begin
+             case(number)
+                 12'h300:read_csr=csr_status;
+-                12'h301:read_csr=32'h40001102;
++                12'h301:read_csr=32'h40141101; // RV32 I/M/A/S/U; integrated atomic/MMU smoke verified
+                 12'h304:read_csr=csr_interrupt_enable;
+                 12'h305:read_csr=csr_vector;
+-                12'h306,12'h310:read_csr=0;
++                12'h306:read_csr=csr_mcounteren;
++                12'h310:read_csr=0;
++                12'h302:read_csr=csr_medeleg;
++                12'h303:read_csr=csr_mideleg;
++                12'h100:read_csr=csr_status&SSTATUS_MASK;
++                12'h104:read_csr=csr_interrupt_enable&csr_mideleg;
++                12'h105:read_csr=csr_svector;
++                12'h106:read_csr=csr_scounteren;
++                12'h140:read_csr=csr_sscratch;
++                12'h141:read_csr=csr_sepc;
++                12'h142:read_csr=csr_scause;
++                12'h143:read_csr=csr_stval;
++                12'h144:read_csr=interrupt_bits&csr_mideleg;
++                12'h180:read_csr=csr_satp;
++                12'hc00:read_csr=cycle_counter[31:0];
++                12'hc80:read_csr=cycle_counter[63:32];
++                12'hc02:read_csr=instruction_counter[31:0];
++                12'hc82:read_csr=instruction_counter[63:32];
+                 12'h340:read_csr=csr_scratch;
+                 12'h341:read_csr=csr_exception_pc;
+                 12'h342:read_csr=csr_cause;
+@@ -225,10 +276,11 @@
+         input [11:0] number;
+         begin
+             case(number)
+-                12'h300,12'h301,12'h304,12'h305,12'h306,12'h310,
++                12'h100,12'h104,12'h105,12'h106,12'h140,12'h141,12'h142,12'h143,12'h144,12'h180,
++                12'h302,12'h303,12'h300,12'h301,12'h304,12'h305,12'h306,12'h310,
+                 12'h340,12'h341,12'h342,12'h343,12'h344,
+                 12'hb00,12'hb80,12'hb02,12'hb82,
+-                12'hc01,12'hc81,
++                12'hc00,12'hc80,12'hc02,12'hc82,12'hc01,12'hc81,
+                 12'hf11,12'hf12,12'hf13,12'hf14,12'hf15:csr_exists=1;
+                 default:csr_exists=(number>=12'hb03 && number<=12'hb1f)||(number>=12'hb83 && number<=12'hb9f)||(number>=12'h323 && number<=12'h33f);
+             endcase
+@@ -250,6 +302,7 @@
+     endfunction
+     reg map_valid[0:31]; reg [3:0] map_tag[0:31];
+     reg rob_valid[0:15],rob_done[0:15],rob_fault[0:15],rob_writes[0:15];
++    reg rob_fetch_page_fault[0:15];
+     reg rob_memory[0:15],rob_store[0:15],rob_complex[0:15],rob_serial[0:15],rob_fetch_error[0:15];
+     reg rob_arithmetic[0:15],rob_decode_error[0:15];
+     reg rob_control[0:15],rob_conditional[0:15],rob_taken[0:15];
+@@ -292,7 +345,7 @@
+     function [31:0] read_rob_next;
+         input [3:0] tag;
+         begin
+-            if(rob_control[tag]||rob_system[tag]==2)
++            if(rob_control[tag]||rob_system[tag]==2||rob_system[tag]==7)
+                 read_rob_next=result_owner[tag]==0?next_lane0[tag]:next_lane1[tag];
+             else read_rob_next=read_rob_pc(tag)+32'd4;
+         end
+@@ -389,7 +442,7 @@
+     reg [31:0] ex_mul_left_local,ex_mul_right_local;
+ 
+     wire [31:0] fetch_instruction0,fetch_instruction1,fetch_pc0,fetch_pc1,fetch_prediction0,fetch_prediction1;
+-    wire fetch_error0,fetch_error1; wire [3:0] fetch_count;
++    wire fetch_error0,fetch_error1,fetch_page_fault0,fetch_page_fault1; wire [3:0] fetch_count;
+     wire fetch_serial0,fetch_serial1,fetch_complex0,fetch_complex1;
+     wire fetch_pc_dispatch_ok0,fetch_pc_dispatch_ok1;
+     wire predictor_training_ready;
+@@ -405,6 +458,9 @@
+     // Recovery cancels acceptance, not the pre-edge free-slot proposal.
+     wire [1:0] allocate_count=recovery?2'b0:allocation_offer_count;
+     reg recovery,trap_enter,return_from_trap,maintain_i,maintain_d;
++    // A new live redirect request must observe post-retirement translation
++    // context. Held old offers still drain, marked killed by the frontend.
++    wire satp_context_commit=retire0&&rob_csr_write[rob_head]&&serial_csr_number==12'h180;
+     reg [31:0] recovery_address,trap_pc,trap_cause,trap_value;
+     reg [63:0] recovery_first;
+     reg retire0,retire1;
+@@ -456,8 +512,8 @@
+             if(allocation_offer_count!=0&&rob_tail==tag)retirement_next_proposal=fetch_pc0+32'd4;
+             else if(allocation_offer_count==2&&tail1==tag)retirement_next_proposal=fetch_pc1+32'd4;
+             else if(payload_integer1&&e_control1&&ex_tag1==tag)retirement_next_proposal=e_next1;
+-            else if(payload0&&(e_control0||e_system0==2)&&ex_tag0==tag)
+-                retirement_next_proposal=e_system0==2?csr_exception_pc:e_next0;
++            else if(payload0&&(e_control0||(e_system0==2||e_system0==7))&&ex_tag0==tag)
++                retirement_next_proposal=e_system0==2?csr_exception_pc:(e_system0==7?csr_sepc:e_next0);
+             else retirement_next_proposal=read_rob_next(tag);
+         end
+     endfunction
+@@ -557,10 +613,10 @@
+         .BIMODAL_INDEX_BITS(BIMODAL_INDEX_BITS),.GSHARE_INDEX_BITS(GSHARE_INDEX_BITS)) frontend(
+         .clk(clk),.reset(reset),.imem_request_valid(imem_request_valid),.imem_request_ready(imem_request_ready),
+         .imem_request_address(imem_request_address),.imem_response_valid(imem_response_valid),
+-        .imem_response_ready(imem_response_ready),.imem_response_data(imem_response_data),.imem_response_error(imem_response_error),
+-        .redirect(recovery),.redirect_address(recovery_address),.maintenance_redirect(maintain_i||maintain_d),.pop_count(allocate_count),.queue_count(fetch_count),
++        .imem_response_ready(imem_response_ready),.imem_response_data(imem_response_data),.imem_response_error(imem_response_error|imem_response_page_fault),.imem_response_page_fault(imem_response_page_fault),
++        .redirect(recovery),.redirect_address(recovery_address),.maintenance_redirect(maintain_i||maintain_d||trap_enter||return_from_trap||satp_context_commit),.pop_count(allocate_count),.queue_count(fetch_count),
+         .instruction0(fetch_instruction0),.instruction1(fetch_instruction1),.pc0(fetch_pc0),.pc1(fetch_pc1),
+-        .prediction0(fetch_prediction0),.prediction1(fetch_prediction1),.error0(fetch_error0),.error1(fetch_error1),
++        .prediction0(fetch_prediction0),.prediction1(fetch_prediction1),.error0(fetch_error0),.error1(fetch_error1),.page_fault0(fetch_page_fault0),.page_fault1(fetch_page_fault1),
+         .serial0(fetch_serial0),.serial1(fetch_serial1),.complex0(fetch_complex0),.complex1(fetch_complex1),
+         .illegal0(d_bad0),.illegal1(d_bad1),
+         .source_used10(d_use10),.source_used20(d_use20),.source_used11(d_use11),.source_used21(d_use21),
+@@ -604,9 +660,9 @@
+             $fatal(1,"R46 second queued operand-use flags differ from execute decoder");
+     end
+     always @(posedge clk)if(!reset)begin
+-        if(fetch_count>0&&fetch_pc_dispatch_ok0!=(fetch_pc0[1:0]==0&&(fetch_pc0[31:28]==1||fetch_pc0[31:28]==8)))
++        if(fetch_count>0&&fetch_pc_dispatch_ok0!=(fetch_pc0[1:0]==0))
+             $fatal(1,"R30 first queued PC classification mismatch");
+-        if(fetch_count>1&&fetch_pc_dispatch_ok1!=(fetch_pc1[1:0]==0&&(fetch_pc1[31:28]==1||fetch_pc1[31:28]==8)))
++        if(fetch_count>1&&fetch_pc_dispatch_ok1!=(fetch_pc1[1:0]==0))
+             $fatal(1,"R30 second queued PC classification mismatch");
+     end
+     always @(posedge clk)if(!reset)begin
+@@ -622,10 +678,10 @@
+     // The unchanged original execution decoder is an independent reference
+     // for every valid head instruction, including reserved/fault encodings.
+     always @(posedge clk)if(!reset)begin
+-        if(fetch_count>0&&((fetch_serial0!=(d_csr0||d_system0!=0))||
++        if(fetch_count>0&&((fetch_serial0!=(d_csr0||d_system0!=0||fetch_instruction0[6:0]==7'h2f))||
+             (fetch_complex0!=(d_mem0||d_mdu0||d_csr0||d_system0!=0))))
+             $fatal(1,"frontend lane 0 class differs from original decoder");
+-        if(fetch_count>1&&((fetch_serial1!=(d_csr1||d_system1!=0))||
++        if(fetch_count>1&&((fetch_serial1!=(d_csr1||d_system1!=0||fetch_instruction1[6:0]==7'h2f))||
+             (fetch_complex1!=(d_mem1||d_mdu1||d_csr1||d_system1!=0))))
+             $fatal(1,"frontend lane 1 class differs from original decoder");
+     end
+@@ -662,6 +718,11 @@
+     assign e_arithmetic1=ex_control_meta1[1];
+ 
+     wire [1:0] e_size0; wire [2:0] e_arithmetic_operation0,e_system0;
++    wire system_access_fault=(e_system0==2 && current_privilege!=3)||
++        (e_system0==7 && (current_privilege==0 || (current_privilege==1&&csr_status[22])))||
++        (e_system0==5 && (current_privilege==0 || (current_privilege!=3&&csr_status[21])))||
++        (((ex_instruction0&32'hfe007fff)==32'h12000073) &&
++            (current_privilege==0 || (current_privilege==1&&csr_status[20])));
+     wire [11:0] e_csr_number0; wire [31:0] e_csr_new0;
+     wire [31:0] e_value_reference0,e_value_reference1;
+     wire [31:0] e_value_predecoded0,e_value_predecoded1;
+@@ -700,6 +761,8 @@
+     reg [1:0] lsu_state;
+     reg [3:0] lsu_tag; reg [63:0] lsu_sequence; reg [31:0] lsu_pc,lsu_address,lsu_wdata;
+     reg [3:0] lsu_strobes; reg [1:0] lsu_size;
++    reg lsu_is_atomic;reg [4:0] lsu_atomic;
++    reg prepared_is_atomic,prepared_second_is_atomic;reg [4:0] prepared_atomic,prepared_second_atomic;
+     reg lsu_store,lsu_unsigned,lsu_killed,lsu_irrevocable,lsu_writes;
+     wire lsu_active=lsu_state!=L_IDLE;
+     // Three registered credits cover A, prepared FIFO P0/P1 and EX.
+@@ -721,7 +784,7 @@
+     // Memory-class fault qualification avoids the unrelated branch-result
+     // alignment cone while preserving exact ownership for ordering checks.
+     wire ex_memory_order_owner=ex_memory_credit&&ex_pc0[1:0]==0&&
+-        !rob_fetch_error[ex_tag0]&&(ex_pc0[31:28]==1||ex_pc0[31:28]==8)&&!e_illegal0&&
++        !rob_fetch_error[ex_tag0]&&!e_illegal0&&
+         !((e_size0==2&&e_address0[1:0]!=0)||(e_size0==1&&e_address0[0]));
+     wire active_reserved=lsu_active||lsu_irrevocable;
+     wire [2:0] memory_reservations_wide={2'b0,active_reserved}+{2'b0,prepared_valid}+
+@@ -743,15 +806,14 @@
+     wire [31:0] candidate_wdata=prepared_valid?prepared_wdata:ex_shifted_store;
+     wire [3:0] candidate_strobes=prepared_valid?prepared_strobes:ex_store_strobes;
+     wire [1:0] candidate_size=prepared_valid?prepared_size:e_size0;
++    wire candidate_is_atomic=prepared_valid?prepared_is_atomic:(ex_instruction0[6:0]==7'b0101111);
++    wire [4:0] candidate_atomic=prepared_valid?prepared_atomic:ex_instruction0[31:27];
+     wire candidate_store=prepared_valid?prepared_store:e_store_enable0;
+     wire candidate_unsigned=prepared_valid?prepared_unsigned:e_unsigned0;
+     wire [11:0] ex_address_offset=ex_instruction0[5]?{ex_instruction0[31:25],ex_instruction0[11:7]}:ex_instruction0[31:20];
+-    wire ex_peripheral_proposal;
+-    rv32_address_classify address_flags(.base(ex_left0),.offset(ex_address_offset),.peripheral(ex_peripheral_proposal));
+-`ifdef VERILATOR
+-    always @(posedge clk)if(!reset&&ex_valid0&&e_memory0&&ex_peripheral_proposal!=peripheral_address(e_address0))
+-        $fatal(1,"R42 early peripheral classification differs from original full effective address");
+-`endif
++    // Before translation no VA range establishes whether a load is MMIO.
++    // Conservatively commit all memory operations at the ROB head.
++    wire ex_peripheral_proposal=1'b1;
+     wire candidate_peripheral=prepared_valid?prepared_peripheral:ex_peripheral_proposal;
+     wire candidate_side_effect=candidate_store||candidate_peripheral;
+     wire active_room=!active_reserved||lsu_turnover;
+@@ -794,6 +856,8 @@
+     // retain the stored old bus owner. Invalid-cycle address is a private
+     // proposal and need not wait for faults, recovery or turnover eligibility.
+     wire direct_address_proposal=lsu_state==L_IDLE||lsu_state==L_WAIT;
++    assign dmem_request_is_atomic=direct_address_proposal?candidate_is_atomic:lsu_is_atomic;
++    assign dmem_request_atomic=direct_address_proposal?candidate_atomic:lsu_atomic;
+     assign dmem_request_address=direct_address_proposal?candidate_address:lsu_address;
+ `ifdef VERILATOR
+     always @(posedge clk)if(!reset&&dmem_request_valid&&
+@@ -819,8 +883,7 @@
+                            (lsu_size==1)?(lsu_unsigned?{16'b0,lsu_shifted[15:0]}:{{16{lsu_shifted[15]}},lsu_shifted[15:0]}):lsu_shifted;
+     function peripheral_address;
+         input [31:0] address;
+-        begin peripheral_address=(address>=32'h30000000&&address<=32'h7fffffff)||
+-                                  (address>=32'h80000000&&address<=32'h83ffffff);end
++        begin peripheral_address=1'b1;end
+     endfunction
+ 
+     reg mdu_active,mdu_writes; reg [3:0] mdu_tag; reg [63:0] mdu_sequence; reg [31:0] mdu_pc;
+@@ -873,14 +936,14 @@
+     always @* begin
+         fault0=0;fault_cause0=0;fault_value0=0;
+         if(ex_pc0[1:0]!=0)begin fault0=1;fault_cause0=0;fault_value0=ex_pc0;end
+-        else if(rob_fetch_error[ex_tag0]||(ex_pc0[31:28]!=1&&ex_pc0[31:28]!=8))begin fault0=1;fault_cause0=1;fault_value0=ex_pc0;end
+-        else if(e_illegal0||ex_csr_access_fault0)begin fault0=1;fault_cause0=2;fault_value0=ex_instruction0;end
++        else if(rob_fetch_error[ex_tag0])begin fault0=1;fault_cause0=rob_fetch_page_fault[ex_tag0]?12:1;fault_value0=ex_pc0;end
++        else if(e_illegal0||ex_csr_access_fault0||system_access_fault)begin fault0=1;fault_cause0=2;fault_value0=ex_instruction0;end
+         else if(e_control0&&e_next0[1:0]!=0)begin fault0=1;fault_cause0=0;fault_value0=e_next0;end
+         else if(e_memory0&&((e_size0==2&&e_address0[1:0]!=0)||(e_size0==1&&e_address0[0])))begin fault0=1;fault_cause0=e_store_enable0?6:4;fault_value0=e_address0;end
+-        else if(e_system0==3||e_system0==4)begin fault0=1;fault_cause0=e_system0==3?11:3;fault_value0=e_system0==4?ex_pc0:0;end
++        else if(e_system0==3||e_system0==4)begin fault0=1;fault_cause0=e_system0==3?(current_privilege==3?11:(current_privilege==1?9:8)):3;fault_value0=e_system0==4?ex_pc0:0;end
+         fault1=0;fault_cause1=0;fault_value1=0;
+         if(ex_pc1[1:0]!=0)begin fault1=1;fault_cause1=0;fault_value1=ex_pc1;end
+-        else if(rob_fetch_error[ex_tag1]||(ex_pc1[31:28]!=1&&ex_pc1[31:28]!=8))begin fault1=1;fault_cause1=1;fault_value1=ex_pc1;end
++        else if(rob_fetch_error[ex_tag1])begin fault1=1;fault_cause1=rob_fetch_page_fault[ex_tag1]?12:1;fault_value1=ex_pc1;end
+         else if(e_illegal1)begin fault1=1;fault_cause1=2;fault_value1=ex_instruction1;end
+         else if(e_control1&&e_next1[1:0]!=0)begin fault1=1;fault_cause1=0;fault_value1=e_next1;end
+     end
+@@ -929,10 +992,10 @@
+     // Raw head-response eligibility is independent of recovery/complete gating.
+     // The response may complete and retire together after all priority checks.
+     wire head_response=!reset&&lsu_response&&!lsu_killed&&rob_count!=0&&lsu_tag==rob_head;
+-    wire head_response_success=head_response&&!dmem_response_error;
++    wire head_response_success=head_response&&!data_response_fault;
+     wire [31:0] head_retire_value=head_response_success?lsu_result:read_result(rob_head);
+     wire complete_memory=!reset&&lsu_response&&!lsu_killed&&
+-                         (!recovery||(head_response&&(retire0||dmem_response_error)));
++                         (!recovery||(head_response&&(retire0||data_response_fault)));
+     wire complete_mdu=complete_legacy||complete_stream;
+     // Reuse the existing idle integer result channel; never a fourth write port.
+     wire spill_mdu=ENABLE_MDU_SPILL&&complete_mdu&&complete_memory;
+@@ -948,7 +1011,7 @@
+     wire [63:0] complete_sequence2=complete_memory?lsu_sequence:arithmetic_sequence;
+     wire [31:0] complete_pc2=complete_memory?lsu_pc:arithmetic_pc;
+     wire [31:0] complete_value2=complete_memory?lsu_result:arithmetic_value;
+-    wire complete_fault2=complete_memory&&dmem_response_error;
++    wire complete_fault2=complete_memory&&data_response_fault;
+     wire complete_writes2=complete_memory?lsu_writes:arithmetic_writes;
+     // Default completion packets are self-contained. The alternative is an
+     // explicit diagnostic control retaining the pre-boundary ROB lookup.
+@@ -987,7 +1050,7 @@
+         (!reset&&ex_valid0&&ex_static_wakeup0&&!(ex_control_meta0[4]&&wake_jalr_misaligned0)):wake0_reference;
+     wire wake1=CARRIED_COMPLETION_WRITES?
+         (raw_spill?(!reset&&raw_arithmetic_writes):early_integer1_wake):wake1_reference;
+-    wire wake2=!reset&&(raw_memory?!dmem_response_error:raw_arithmetic)&&
++    wire wake2=!reset&&(raw_memory?!data_response_fault:raw_arithmetic)&&
+         (CARRIED_COMPLETION_WRITES?(raw_memory?lsu_writes:raw_arithmetic_writes):
+             (rob_writes[wake_tag2]&&rob_destination[wake_tag2]!=0));
+     // R51: compute each response case without using cache hit/response
+@@ -1010,7 +1073,7 @@
+             $fatal(1,"TOPT2 EX1 static wake metadata mismatch");
+     end
+ `endif
+-    wire early_memory_wake=!reset&&!dmem_response_error&&
++    wire early_memory_wake=!reset&&!data_response_fault&&
+         (CARRIED_COMPLETION_WRITES?lsu_writes:(rob_writes[lsu_tag]&&rob_destination[lsu_tag]!=0));
+     // Experiment: only the ordered scheduler defers arithmetic dependencies
+     // until queue operand capture. Neither counterfactual may bypass a MUL/
+@@ -1057,7 +1120,7 @@
+     endfunction
+     // A grant-plus-response for a held OFFER still belongs to that old offer.
+     // Fast handoff is restricted to WAIT, so its ready cannot accept a new owner.
+-    wire lsu_turnover=lsu_state==L_WAIT&&lsu_response&&!lsu_killed&&!dmem_response_error&&
++    wire lsu_turnover=lsu_state==L_WAIT&&lsu_response&&!lsu_killed&&!data_response_fault&&
+                       (!lsu_irrevocable||(retire0&&lsu_tag==rob_head)||(retire1&&lsu_tag==head1));
+     wire active_retiring=(retire0&&lsu_tag==rob_head)||(retire1&&lsu_tag==head1);
+     wire active_release=(lsu_response&&(!lsu_irrevocable||active_retiring||trap_enter))||
+@@ -1271,18 +1334,22 @@
+         if(!reset)begin
+             if(rob_count!=0&&rob_done[rob_head]&&rob_fault[rob_head])begin
+                 trap_enter=1;trap_pc=read_rob_pc(rob_head);trap_cause=rob_cause[rob_head];trap_value=read_rob_tval(rob_head);recovery_first=rob_sequence[rob_head];
+-            end else if(head_response&&dmem_response_error)begin
+-                trap_enter=1;trap_pc=read_rob_pc(rob_head);trap_cause=lsu_store?7:5;trap_value=lsu_address;recovery_first=rob_sequence[rob_head];
++            end else if(head_response&&data_response_fault)begin
++                trap_enter=1;trap_pc=read_rob_pc(rob_head);trap_cause=dmem_response_page_fault?(lsu_store?15:13):(lsu_store?7:5);trap_value=lsu_address;recovery_first=rob_sequence[rob_head];
+             end else if(interrupt_pending&&!lsu_irrevocable&&!ex_head_side_effect&&!prepared_side_effect)begin
+                 trap_enter=1;trap_pc=rob_count!=0?read_rob_pc(rob_head):architectural_pc;
+                 trap_cause=interrupt_cause;recovery_first=rob_count!=0?rob_sequence[rob_head]:next_sequence;
+             end else if(rob_count!=0&&(rob_done[rob_head]||head_response_success)&&
+                 (predictor_training_ready||!rob_conditional[rob_head]))begin
+                 retire0=1;
+-                if(rob_system[rob_head]==2)begin
+-                    return_from_trap=1;recovery=1;recovery_address=csr_exception_pc;recovery_first=rob_sequence[rob_head]+64'd1;
++                if((rob_system[rob_head]==2||rob_system[rob_head]==7))begin
++                    return_from_trap=1;recovery=1;recovery_address=rob_system[rob_head]==7?csr_sepc:csr_exception_pc;recovery_first=rob_sequence[rob_head]+64'd1;
+                 end else if(rob_system[rob_head]==1||rob_system[rob_head]==6)begin
+                     maintain_i=1;maintain_d=rob_system[rob_head]==6;recovery=1;recovery_address=retirement_next0;recovery_first=rob_sequence[rob_head]+64'd1;
++                end else if(rob_csr_write[rob_head]&&serial_csr_number==12'h180)begin
++                    // Refetch younger instructions under the new SATP without
++                    // invalidating ASID-tagged TLB entries (SFENCE is separate).
++                    recovery=1;recovery_address=retirement_next0;recovery_first=rob_sequence[rob_head]+64'd1;
+                 end else if(rob_prediction_miss[rob_head])begin
+                     recovery=1;recovery_address=retirement_next0;recovery_first=rob_sequence[rob_head]+64'd1;
+                 end else if(ENABLE_PAIRING&&!rob_serial[rob_head]&&rob_count>1&&!rob_fault[head1]&&!rob_serial[head1])begin
+@@ -1305,7 +1372,7 @@
+                 trap_pc=registered_pair_retire?retirement_next1:retirement_next0;
+                 recovery_first=(registered_pair_retire?rob_sequence[head1]:rob_sequence[rob_head])+64'd1;
+             end
+-            if(trap_enter)begin recovery=1;recovery_address={csr_vector[31:2],2'b0};end
++            if(trap_enter)begin recovery=1;recovery_address=trap_target(trap_cause);end
+         end
+     end
+ `ifdef VERILATOR
+@@ -1319,18 +1386,20 @@
+         if(!reset)begin
+             if(rob_count!=0&&rob_done[rob_head]&&rob_fault[rob_head])begin
+                 prior_trap_enter=1;prior_trap_pc=read_rob_pc(rob_head);prior_trap_cause=rob_cause[rob_head];prior_trap_value=read_rob_tval(rob_head);prior_recovery_first=rob_sequence[rob_head];
+-            end else if(head_response&&dmem_response_error)begin
+-                prior_trap_enter=1;prior_trap_pc=read_rob_pc(rob_head);prior_trap_cause=lsu_store?7:5;prior_trap_value=lsu_address;prior_recovery_first=rob_sequence[rob_head];
++            end else if(head_response&&data_response_fault)begin
++                prior_trap_enter=1;prior_trap_pc=read_rob_pc(rob_head);prior_trap_cause=dmem_response_page_fault?(lsu_store?15:13):(lsu_store?7:5);prior_trap_value=lsu_address;prior_recovery_first=rob_sequence[rob_head];
+             end else if(interrupt_pending&&!lsu_irrevocable&&!ex_head_side_effect&&!prepared_side_effect)begin
+                 prior_trap_enter=1;prior_trap_pc=rob_count!=0?read_rob_pc(rob_head):architectural_pc;
+                 prior_trap_cause=interrupt_cause;prior_recovery_first=rob_count!=0?rob_sequence[rob_head]:next_sequence;
+             end else if(rob_count!=0&&(rob_done[rob_head]||head_response_success)&&
+                 (predictor_training_ready||!rob_conditional[rob_head]))begin
+                 prior_retire0=1;
+-                if(rob_system[rob_head]==2)begin
+-                    prior_return_from_trap=1;prior_recovery=1;prior_recovery_address=csr_exception_pc;prior_recovery_first=rob_sequence[rob_head]+64'd1;
++                if((rob_system[rob_head]==2||rob_system[rob_head]==7))begin
++                    prior_return_from_trap=1;prior_recovery=1;prior_recovery_address=rob_system[rob_head]==7?csr_sepc:csr_exception_pc;prior_recovery_first=rob_sequence[rob_head]+64'd1;
+                 end else if(rob_system[rob_head]==1||rob_system[rob_head]==6)begin
+                     prior_maintain_i=1;prior_maintain_d=rob_system[rob_head]==6;prior_recovery=1;prior_recovery_address=read_rob_next(rob_head);prior_recovery_first=rob_sequence[rob_head]+64'd1;
++                end else if(rob_csr_write[rob_head]&&serial_csr_number==12'h180)begin
++                    prior_recovery=1;prior_recovery_address=read_rob_next(rob_head);prior_recovery_first=rob_sequence[rob_head]+64'd1;
+                 end else if(rob_prediction_miss[rob_head])begin
+                     prior_recovery=1;prior_recovery_address=read_rob_next(rob_head);prior_recovery_first=rob_sequence[rob_head]+64'd1;
+                 end else if(ENABLE_PAIRING&&!rob_serial[rob_head]&&rob_count>1&&(predictor_training_ready||!rob_conditional[head1])&&(rob_done[head1]||current_second_integer)&&!rob_fault[head1]&&!rob_serial[head1])begin
+@@ -1346,7 +1415,7 @@
+                 prior_trap_pc=prior_retire1?read_rob_next(head1):read_rob_next(rob_head);
+                 prior_recovery_first=(prior_retire1?rob_sequence[head1]:rob_sequence[rob_head])+64'd1;
+             end
+-            if(prior_trap_enter)begin prior_recovery=1;prior_recovery_address={csr_vector[31:2],2'b0};end
++            if(prior_trap_enter)begin prior_recovery=1;prior_recovery_address=trap_target(prior_trap_cause);end
+         end
+     end
+     always @(posedge clk)if(!reset)begin
+@@ -1396,7 +1465,7 @@
+     wire miss_event_admit=!reset&&rob_count!=0&&(predictor_training_ready||!rob_conditional[rob_head])&&
+         !(rob_done[rob_head]&&rob_fault[rob_head])&&
+         !(interrupt_pending&&!lsu_irrevocable&&!ex_head_side_effect&&!prepared_side_effect);
+-    wire miss_event_ready=(rob_done[rob_head]&&!(head_response&&dmem_response_error))||head_response_success;
++    wire miss_event_ready=(rob_done[rob_head]&&!(head_response&&data_response_fault))||head_response_success;
+     wire miss_event0=rob_control[rob_head]&&rob_prediction_miss[rob_head];
+     wire miss_event1=ENABLE_PAIRING&&rob_count>1&&(predictor_training_ready||!rob_conditional[head1])&&
+         rob_system[rob_head]!=2&&rob_system[rob_head]!=1&&rob_system[rob_head]!=6&&
+@@ -2348,6 +2417,7 @@
+             rob_memory[tag]<=memory_operation;rob_store[tag]<=store_operation;rob_arithmetic[tag]<=arithmetic_operation;
+             rob_serial[tag]<=serial_operation;rob_complex[tag]<=complex_operation;rob_decode_error[tag]<=decode_error;
+             rob_fetch_error[tag]<=fetch_error;
++            rob_fetch_page_fault[tag]<=tag==rob_tail?fetch_page_fault0:fetch_page_fault1;
+             rob_destination[tag]<=destination;
+             rob_sequence[tag]<=ENABLE_TRACE?sequence_number:0;
+             // Constant row guards eliminate disabled payload registers.
+@@ -2585,7 +2655,7 @@
+             immutable_control_metadata[0]=ordinary_integer_class(instruction);
+             immutable_control_metadata[1]=instruction[6:0]==7'b1101111&&instruction[21];
+             immutable_control_metadata[2]=instruction[6:0]==7'b1100111;
+-            immutable_control_metadata[3]=pc[1:0]!=0||(pc[31:28]!=1&&pc[31:28]!=8);
++            immutable_control_metadata[3]=pc[1:0]!=0;
+             immutable_control_metadata[4]=instruction_csr_access_fault(instruction);
+         end
+     endfunction
+@@ -2673,7 +2743,13 @@
+             write_requested=instruction[13:12]==1||
+                 ((instruction[13:12]==2||instruction[13:12]==3)&&instruction[19:15]!=0);
+             instruction_csr_access_fault=csr_instruction&&
+-                (!csr_exists(instruction[31:20])||(write_requested&&instruction[31:30]==3));
++                (!csr_exists(instruction[31:20])||(write_requested&&instruction[31:30]==3)||
++                 current_privilege<instruction[29:28]||
++                 (instruction[31:20]==12'h180&&current_privilege==1&&csr_status[20])||
++                 ((instruction[31:20]==12'hc00||instruction[31:20]==12'hc80||
++                   instruction[31:20]==12'hc01||instruction[31:20]==12'hc81||
++                   instruction[31:20]==12'hc02||instruction[31:20]==12'hc82)&&current_privilege!=3&&
++                  (!csr_mcounteren[instruction[24:20]]||(current_privilege==0&&!csr_scounteren[instruction[24:20]]))));
+         end
+     endfunction
+ 
+@@ -2799,11 +2875,10 @@
+     // Comparing only valid packets avoids imposing requirements on proposals
+     // canceled by recovery or on payload left behind after a bubble.
+     wire exmeta_static_reference0=ex_pc0[1:0]!=0||rob_fetch_error[ex_tag0]||
+-        (ex_pc0[31:28]!=1&&ex_pc0[31:28]!=8)||e_illegal_reference0;
++        e_illegal_reference0;
+     wire exmeta_static_reference1=ex_pc1[1:0]!=0||rob_fetch_error[ex_tag1]||
+-        (ex_pc1[31:28]!=1&&ex_pc1[31:28]!=8)||e_illegal_reference1;
+-    wire exmeta_csr_reference0=e_csr0&&
+-        (!csr_exists(e_csr_number0)||(e_csr_write0&&e_csr_number0[11:10]==3));
++        e_illegal_reference1;
++    wire exmeta_csr_reference0=instruction_csr_access_fault(ex_instruction0);
+     wire exmeta_integer_reference0=exmeta_static_reference0||exmeta_csr_reference0||
+         (ex_instruction0[6:0]==7'b1101111&&ex_instruction0[21])||
+         (ex_instruction0[6:0]==7'b1100111&&jalr_low0[1]);
+@@ -2885,7 +2960,7 @@
+     wire payload1=payload_integer1||raw_spill;
+     wire payload2=raw_memory||(raw_arithmetic&&!raw_spill);
+     wire payload_fault1=!raw_spill&&fault1;
+-    wire payload_fault2=raw_memory&&dmem_response_error;
++    wire payload_fault2=raw_memory&&data_response_fault;
+     // TOPT5: use the targets already computed for control flow. There is no
+     // extra prediction-minus-PC adder, and no direction -> 32-bit next-PC mux
+     // -> comparison path hidden inside the non-branch fallback. Direction
+@@ -2982,7 +3057,7 @@
+                     end
+                 end
+                 if(packet2)begin
+-                    rob_fault[completion_row]<=payload_fault2;rob_cause[completion_row]<=lsu_store?7:5;
++                    rob_fault[completion_row]<=payload_fault2;rob_cause[completion_row]<=dmem_response_page_fault?(lsu_store?15:13):(lsu_store?7:5);
+                     result_owner[completion_row]<=2;
+                 end
+                 // Pre-edge free allocation targets override any dead payload.
+@@ -3004,7 +3079,19 @@
+ `endif
+     end endgenerate
+     always @(posedge clk)begin
+-        if(payload0)begin serial_csr_number<=e_csr_number0;serial_csr_value<=e_csr_new0;end
++        if(payload0)begin
++            serial_csr_number<=e_csr_number0;serial_csr_value<=e_csr_new0;
++            // mip.SEIP has a software latch ORed with the external controller
++            // for rd readback. The external level MUST NOT feed the CSRRS/RC
++            // RMW write value, including immediate forms (Privileged ISA).
++            // CSRRW still writes its source directly; e_value0 retains OR readback.
++            if(e_csr0&&e_csr_number0==12'h344&&ex_instruction0[13])begin
++                if(ex_instruction0[12])
++                    serial_csr_value[9]<=csr_pending[9]&~(!ex_instruction0[14]&&ex_left0[9]);
++                else
++                    serial_csr_value[9]<=csr_pending[9]|(!ex_instruction0[14]&&ex_left0[9]);
++            end
++        end
+     end
+ `ifdef VERILATOR
+     always @(posedge clk)if(!reset&&!recovery)begin
+@@ -3030,11 +3117,11 @@
+             rob_context_odd[rob_tail[0]?rob_tail[3:1]:tail1[3:1]]<=rob_tail[0]?fetch_prediction_context0:fetch_prediction_context1;
+             rob_prediction_odd[rob_tail[0]?rob_tail[3:1]:tail1[3:1]]<=rob_tail[0]?fetch_prediction0:fetch_prediction1;
+         end
+-        if(payload0&&(e_control0||e_system0==2))next_lane0[ex_tag0]<=e_system0==2?csr_exception_pc:e_next0;
++        if(payload0&&(e_control0||e_system0==2||e_system0==7))next_lane0[ex_tag0]<=e_system0==2?csr_exception_pc:(e_system0==7?csr_sepc:e_next0);
+         if(payload_integer1&&e_control1)next_lane1[ex_tag1]<=e_next1;
+         if(payload0&&fault0)tval_lane0[ex_tag0]<=fault_value0;
+         if(payload_integer1&&fault1)tval_lane1[ex_tag1]<=fault_value1;
+-        if(payload2&&raw_memory&&dmem_response_error)tval_lane2[wake_tag2]<=lsu_address;
++        if(payload2&&raw_memory&&data_response_fault)tval_lane2[wake_tag2]<=lsu_address;
+         if(retire0&&rob_writes[rob_head]&&rob_destination[rob_head]!=0)
+             register_lane0[rob_destination[rob_head]]<=head_retire_value;
+         if(retire1&&rob_writes[head1]&&rob_destination[head1]!=0)
+@@ -3123,12 +3210,15 @@
+         if(reset)begin
+             rob_head<=0;rob_tail<=0;rob_count<=0;serial_pending<=0;steer<=0;next_sequence<=0;
+             ex_valid0<=0;ex_valid1<=0;ex_writes0<=0;ex_writes1<=0;ex_tag0<=0;ex_tag1<=0;ex_sequence0<=0;ex_sequence1<=0;
++            lsu_is_atomic<=0;lsu_atomic<=0;prepared_is_atomic<=0;prepared_atomic<=0;prepared_second_is_atomic<=0;prepared_second_atomic<=0;
+             lsu_state<=L_IDLE;lsu_tag<=0;lsu_sequence<=0;lsu_pc<=0;lsu_address<=0;lsu_wdata<=0;
+             lsu_writes<=0;lsu_strobes<=0;lsu_size<=0;lsu_store<=0;lsu_unsigned<=0;lsu_killed<=0;lsu_irrevocable<=0;
+             prepared_second_valid<=0;
+             prepared_valid<=0;prepared_writes<=0;prepared_tag<=0;prepared_sequence<=0;prepared_pc<=0;prepared_address<=0;
+             prepared_wdata<=0;prepared_strobes<=0;prepared_size<=0;prepared_store<=0;prepared_unsigned<=0;prepared_peripheral<=0;
+             mdu_active<=0;mdu_writes<=0;mdu_tag<=0;mdu_sequence<=0;mdu_pc<=0;
++            current_privilege<=3;csr_svector<=0;csr_sscratch<=0;csr_sepc<=0;csr_scause<=0;csr_stval<=0;csr_satp<=0;
++            csr_medeleg<=0;csr_mideleg<=0;csr_mcounteren<=0;csr_scounteren<=0;csr_pending<=0;
+             csr_status<=32'h00001800;csr_interrupt_enable<=0;csr_vector<=0;csr_scratch<=0;
+             csr_exception_pc<=0;csr_cause<=0;csr_trap_value<=0;
+             cycle_counter<=0;instruction_counter<=0;architectural_pc<=RESET_VECTOR;
+@@ -3233,12 +3323,29 @@
+             register_valid[0]<=0;map_valid[0]<=0;
+             if(retire0&&rob_csr_write[rob_head])begin
+                 case(serial_csr_number)
+-                    12'h300:csr_status<=(serial_csr_value&32'h00000088)|32'h00001800;
+-                    12'h304:csr_interrupt_enable<=serial_csr_value&32'h00000888;
+-                    12'h305:csr_vector<={serial_csr_value[31:2],2'b0};
++                    12'h300:begin
++                        csr_status<=serial_csr_value&STATUS_MASK;
++                        if(serial_csr_value[12:11]==2)csr_status[12:11]<=0;
++                    end
++                    12'h100:csr_status<=(csr_status&~SSTATUS_MASK)|(serial_csr_value&SSTATUS_MASK);
++                    12'h302:csr_medeleg<=serial_csr_value&32'h0000b3ff;
++                    12'h303:csr_mideleg<=serial_csr_value&32'h00000222;
++                    12'h306:csr_mcounteren<=serial_csr_value&7;
++                    12'h106:csr_scounteren<=serial_csr_value&7;
++                    12'h104:csr_interrupt_enable<=(csr_interrupt_enable&~csr_mideleg)|(serial_csr_value&csr_mideleg&32'h222);
++                    12'h344:csr_pending<=serial_csr_value&32'h222;
++                    12'h144:csr_pending<=(csr_pending&~(csr_mideleg&32'h2))|(serial_csr_value&csr_mideleg&32'h2);
++                    12'h105:csr_svector<={serial_csr_value[31:2],1'b0,serial_csr_value[1:0]==1};
++                    12'h140:csr_sscratch<=serial_csr_value;
++                    12'h141:csr_sepc<={serial_csr_value[31:2],2'b0};
++                    12'h142:csr_scause<=serial_csr_value;
++                    12'h143:csr_stval<=serial_csr_value;
++                    12'h180:csr_satp<=serial_csr_value;
++                    12'h304:csr_interrupt_enable<=serial_csr_value&32'h00000aaa;
++                    12'h305:csr_vector<={serial_csr_value[31:2],1'b0,serial_csr_value[1:0]==1};
+                     12'h340:csr_scratch<=serial_csr_value;
+                     12'h341:csr_exception_pc<={serial_csr_value[31:2],2'b0};
+-                    12'h342:csr_cause<=serial_csr_value&32'h8000000f;
++                    12'h342:csr_cause<=serial_csr_value;
+                     12'h343:csr_trap_value<=serial_csr_value;
+                     12'hb00:cycle_counter<={cycle_counter[63:32],serial_csr_value};
+                     12'hb80:cycle_counter<={serial_csr_value,cycle_counter[31:0]};
+@@ -3251,10 +3358,25 @@
+                     end
+                 endcase
+             end
+-            if(return_from_trap)begin csr_status[3]<=csr_status[7];csr_status[7]<=1;end
++            if(return_from_trap)begin
++                if(rob_system[rob_head]==7)begin
++                    current_privilege<=csr_status[8]?1:0;
++                    csr_status[1]<=csr_status[5];csr_status[5]<=1;csr_status[8]<=0;csr_status[17]<=0;
++                end else begin
++                    current_privilege<=csr_status[12:11];
++                    csr_status[3]<=csr_status[7];csr_status[7]<=1;csr_status[12:11]<=0;
++                    if(csr_status[12:11]!=3)csr_status[17]<=0;
++                end
++            end
+             if(trap_enter)begin
+-                csr_exception_pc<={trap_pc[31:2],2'b0};csr_cause<=trap_cause;csr_trap_value<=trap_value;
+-                csr_status[7]<=csr_status[3];csr_status[3]<=0;lsu_irrevocable<=0;
++                if(current_privilege!=3&&(trap_cause[31]?csr_mideleg[trap_cause[4:0]]:csr_medeleg[trap_cause[4:0]]))begin
++                    csr_sepc<={trap_pc[31:2],2'b0};csr_scause<=trap_cause;csr_stval<=trap_value;
++                    csr_status[5]<=csr_status[1];csr_status[1]<=0;csr_status[8]<=current_privilege==1;current_privilege<=1;
++                end else begin
++                    csr_exception_pc<={trap_pc[31:2],2'b0};csr_cause<=trap_cause;csr_trap_value<=trap_value;
++                    csr_status[7]<=csr_status[3];csr_status[3]<=0;csr_status[12:11]<=current_privilege;current_privilege<=3;
++                end
++                lsu_irrevocable<=0;
+             end
+             if(recovery)architectural_pc<=recovery_address;
+ 
+@@ -3273,6 +3395,7 @@
+             // Unowned/turning-over payload may settle before late admission.
+             // State, killed and irrevocable ownership still use active_handoff.
+             if(active_room)begin
++                lsu_is_atomic<=candidate_is_atomic;lsu_atomic<=candidate_atomic;
+                 lsu_tag<=candidate_tag;lsu_writes<=candidate_writes;lsu_sequence<=candidate_sequence;lsu_pc<=candidate_pc;
+                 lsu_address<=candidate_address;lsu_size<=candidate_size;lsu_store<=candidate_store;lsu_unsigned<=candidate_unsigned;
+                 lsu_wdata<=candidate_wdata;lsu_strobes<=candidate_strobes;
+@@ -3298,6 +3421,7 @@
+                     prepared_wdata<=prepared_second_wdata;
+                     prepared_strobes<=prepared_second_strobes;
+                     prepared_peripheral<=prepared_second_peripheral;
++                    prepared_is_atomic<=prepared_second_is_atomic;prepared_atomic<=prepared_second_atomic;
+                         if(ex_memory_reservation)begin
+                             prepared_second_valid<=1;
+                     prepared_second_tag<=ex_tag0;
+@@ -3311,6 +3435,7 @@
+                     prepared_second_wdata<=ex_shifted_store;
+                     prepared_second_strobes<=ex_store_strobes;
+                     prepared_second_peripheral<=ex_peripheral_proposal;
++                    prepared_second_is_atomic<=ex_instruction0[6:0]==7'b0101111;prepared_second_atomic<=ex_instruction0[31:27];
+                         end else prepared_second_valid<=0;
+                     end else if(ex_memory_reservation)begin
+                         prepared_valid<=1;
+@@ -3325,6 +3450,7 @@
+                     prepared_wdata<=ex_shifted_store;
+                     prepared_strobes<=ex_store_strobes;
+                     prepared_peripheral<=ex_peripheral_proposal;
++                    prepared_is_atomic<=ex_instruction0[6:0]==7'b0101111;prepared_atomic<=ex_instruction0[31:27];
+                     end else prepared_valid<=0;
+                 end else if(ex_memory_reservation&&!(active_handoff&&!prepared_valid))begin
+                     if(!prepared_valid)begin
+@@ -3340,6 +3466,7 @@
+                     prepared_wdata<=ex_shifted_store;
+                     prepared_strobes<=ex_store_strobes;
+                     prepared_peripheral<=ex_peripheral_proposal;
++                    prepared_is_atomic<=ex_instruction0[6:0]==7'b0101111;prepared_atomic<=ex_instruction0[31:27];
+                     end else begin
+                         prepared_second_valid<=1;
+                     prepared_second_tag<=ex_tag0;
+@@ -3353,6 +3480,7 @@
+                     prepared_second_wdata<=ex_shifted_store;
+                     prepared_second_strobes<=ex_store_strobes;
+                     prepared_second_peripheral<=ex_peripheral_proposal;
++                    prepared_second_is_atomic<=ex_instruction0[6:0]==7'b0101111;prepared_second_atomic<=ex_instruction0[31:27];
+                     end
+                 end
+             end

@@ -1,0 +1,20 @@
+--- Core01/rv32_instruction_flags.v
++++ Core01Linux/rv32_instruction_flags.v
+@@ -15,11 +15,15 @@
+         (ext==4&&sub==4&&rs2==0)||(ext==20&&sub==1)||
+         (ext==36&&(sub==1||sub==5))||(ext==52&&sub==1);
+     wire privileged_legal=instruction==32'h00000073||instruction==32'h00100073||
+-        instruction==32'h30200073||instruction==32'h10500073||
++        instruction==32'h30200073||instruction==32'h10200073||instruction==32'h10500073||
+         (instruction&32'hfe007fff)==32'h12000073;
+     // Parallel accepted-encoding predicates, avoiding a general ALU result
+     // decoder's nested priority and output-sharing cones on the BRAM path.
+-    wire legal=(op==7'd55)||(op==7'd23)||(op==7'd111)||
++    wire atomic_legal=sub==2 && ((instruction[31:27]==2&&rs2==0)||
++        instruction[31:27]==3||instruction[31:27]==1||instruction[31:27]==0||
++        instruction[31:27]==4||instruction[31:27]==12||instruction[31:27]==8||
++        instruction[31:27]==16||instruction[31:27]==20||instruction[31:27]==24||instruction[31:27]==28);
++    wire legal=(op==7'd47&&atomic_legal)||(op==7'd55)||(op==7'd23)||(op==7'd111)||
+         (op==7'd103&&sub==0)||(op==7'd99&&sub!=2&&sub!=3)||
+         (op==7'd3&&sub!=3&&sub<6)||(op==7'd35&&sub<3)||
+         (op==7'd19&&imm_legal)||(op==7'd51&&reg_legal)||

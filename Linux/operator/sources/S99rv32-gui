@@ -1,0 +1,64 @@
+#!/bin/sh
+# Start the real LVGL application and retain its diagnostics in /var/log.
+pidfile=/run/rv32-gui.pid
+fifo=/run/rv32-gui/commands
+is_gui() {
+  [ -r "$pidfile" ] || return 1
+  pid=$(cat "$pidfile")
+  case "$pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$pid/cmdline")" in
+    *'/usr/bin/rv32-gui '*) kill -0 "$pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+is_splash() {
+  [ -r /run/rv32-psplash.pid ] || return 1
+  splash_pid=$(cat /run/rv32-psplash.pid)
+  case "$splash_pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$splash_pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$splash_pid/cmdline")" in
+    *'/usr/bin/psplash -n '*) kill -0 "$splash_pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+stop_splash() {
+  if ! is_splash; then return 0; fi
+  /usr/bin/psplash-write QUIT || true
+  n=0
+  while is_splash && [ "$n" -lt 60 ]; do
+    sleep 0.5
+    n=$((n+1))
+  done
+  if is_splash; then
+    echo "Splash did not exit; requesting termination" >&2
+    kill "$splash_pid" 2>/dev/null || true
+    n=0
+    while is_splash && [ "$n" -lt 20 ]; do
+      sleep 0.1
+      n=$((n+1))
+    done
+  fi
+  if is_splash; then
+    echo "Splash still owns the display; refusing to start GUI" >&2
+    return 1
+  fi
+  return 0
+}
+case "${1:-}" in
+ start)
+  mkdir -p /run/rv32-gui
+  chmod 700 /run/rv32-gui
+  if is_gui; then exit 0; fi
+  # Wait for the splash process to release the double-buffered display.
+  stop_splash || exit 1
+  rm -f "$pidfile" "$fifo"
+  /usr/bin/rv32-gui --fb /dev/fb0 >>/var/log/rv32-gui.log 2>&1 </dev/null &
+  printf '%s\n' "$!" > "$pidfile"
+  ;;
+ stop)
+  if is_gui; then kill "$pid"; fi
+  rm -f "$pidfile"
+  ;;
+ *) echo "Usage: $0 {start|stop}"; exit 2;;
+esac

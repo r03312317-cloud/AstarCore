@@ -1,0 +1,5 @@
+config BR2_PACKAGE_RV32_GUI
+	bool "RV32 LVGL framebuffer GUI"
+	depends on BR2_USE_MMU
+	help
+	  LVGL 8.3 RGB565 framebuffer application, no X11 or Wayland.

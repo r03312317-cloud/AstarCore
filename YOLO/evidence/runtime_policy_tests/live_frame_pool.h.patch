@@ -1,0 +1,36 @@
+--- original/live_frame_pool.h
++++ runtime_policy/live_frame_pool.h
+@@ -5,6 +5,7 @@
+ #ifndef SOC_LIVE_FRAME_POOL_H
+ #define SOC_LIVE_FRAME_POOL_H
+ #include "camera_frame_pool.h"
++#include "camera_loss_policy.h"
+ #define LIVE_FB0 0x82200000u
+ #define LIVE_FB1 0x82300000u
+ #define LIVE_FLAG 1u
+@@ -143,9 +144,14 @@
+             if(!r){live_preview.fault=CAMERA_NOT_READY;goto done;}
+             live_preview.inflight=0u;
+             if(r==1u)live_preview.valid++;else live_preview.dropped++;
+-        } else if(ticks64()-live_preview.capture_started>(uint64_t)HZ*5u) {
+-            live_preview.fault=CAMERA_TIMEOUT;goto done;
++            /* Evaluate loss only after DONE and final DMA retirement. A
++             * partial in-flight transfer is not evidence of pixel loss. */
++            if(camera_loss_abort(R32(CAMERA+12u),R32(CAMERA+16u))) {
++                live_preview.fault=CAMERA_BAD_FRAME;goto done;
++            }
+         }
++        /* User policy: keep servicing UART and preview while waiting for
++         * camera completion; elapsed time alone never aborts capture. */
+     }
+     live_preview_metadata_step();if(live_preview.fault)goto done;
+     if(!live_preview.stopping&&!live_preview.infer_waiting&&!live_preview.infer_image&&
+@@ -191,7 +197,7 @@
+         if(!live_preview.resize_phase&&!image_async_owned&&!live_inference_lease.valid)
+             frame_pool_take(&live_pool,FRAME_POOL_INFERENCE,live_preview.infer_last_generation,&live_inference_lease);
+         if(!live_inference_lease.valid||live_preview.resize_phase||image_async_owned) {
+-            if(ticks64()-live_inference_started>(uint64_t)HZ*5u){live_preview.fault=CAMERA_TIMEOUT;return CAMERA_TIMEOUT;}
++            /* No recognition/input-idle deadline: yield cooperatively. */
+             return IMAGE_IN_PROGRESS;
+         }
+         camera_pool_slot *slot=&live_pool.slot[live_inference_lease.index];

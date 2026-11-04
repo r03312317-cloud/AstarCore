@@ -1,0 +1,25 @@
+{
+  "type": "CPU70_NPU100_STATIC_CLOCK_CONTRACT",
+  "reference_hz": 125000000,
+  "cpu_clock_hz": 70000000,
+  "npu_clock_hz": 100000000,
+  "memory_ui_clock_hz": 93750000,
+  "cpu_pll_module": "soc_cpu70_pll_probe",
+  "cpu_pll_instance": "u_cpu_pll",
+  "npu_pll_module": "soc_cpu100_pll_probe",
+  "npu_pll_instance": "u_npu_pll",
+  "cpu_generated_ratio": [
+    14,
+    25
+  ],
+  "npu_generated_ratio": [
+    4,
+    5
+  ],
+  "cpu_period_ns": 14.285714285714286,
+  "npu_period_ns": 10,
+  "uart_baud_requested": 115200,
+  "uart_divisor_legacy_and_aux": 608,
+  "uart_baud_actual": 115131.57894736843,
+  "required_extra_native_source": "ipcore/soc_cpu70_pll_probe/soc_cpu70_pll_probe.v"
+}

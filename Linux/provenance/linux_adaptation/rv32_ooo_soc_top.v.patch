@@ -1,0 +1,18 @@
+--- Core01/rv32_ooo_soc_top.v
++++ Core01Linux/rv32_ooo_soc_top.v
+@@ -152,12 +152,12 @@
+         .clk(clk),.reset(reset),
+         .imem_request_valid(iv),.imem_request_ready(ir),.imem_request_address(ia),
+         .imem_response_valid(ipv),.imem_response_ready(ipr),
+-        .imem_response_data(ipd),.imem_response_error(ipe),
++        .imem_response_data(ipd),.imem_response_error(ipe),.imem_response_page_fault(2'b0),
+         .dmem_request_valid(dv),.dmem_request_ready(dr),.dmem_request_address(da),
+         .dmem_request_write(dw),.dmem_request_size(dz),.dmem_request_wdata(dwd),
+         .dmem_request_wstrb(ds),.dmem_response_valid(dpv),.dmem_response_ready(dpr),
+-        .dmem_response_rdata(dpd),.dmem_response_error(dpe),
+-        .irq_software(irq_software_i),.irq_timer(irq_timer_i),.irq_external(irq_external_i),
++        .dmem_response_rdata(dpd),.dmem_response_error(dpe),.dmem_response_page_fault(1'b0),
++        .irq_supervisor_external(1'b0),.irq_software(irq_software_i),.irq_timer(irq_timer_i),.irq_external(irq_external_i),
+         .mtime(mtime_i),.event_icache_refill(event_i),.event_dcache_refill(event_d),
+         .event_dcache_writeback(event_w),.fence_i(fi),.fence_d(fd),
+         .debug_redirect(trace_reschedule_o),.debug_trap(trace_reschedule_trap_o),

@@ -1,0 +1,12 @@
+# Preserve original mixed line endings and source SHA-256 values.
+* -text
+*.png binary
+*.ttf binary
+*.gz binary
+*.onnx binary
+*.bin binary
+cpu/analysis/profile/model/** linguist-generated=true
+Game/baseline/** linguist-vendored=true
+Game/source/build/** linguist-generated=true
+Linux/provenance/** linguist-vendored=true
+YOLO/exact/runtime_policy/workspace/native_pds25_03/lowered/** linguist-generated=true

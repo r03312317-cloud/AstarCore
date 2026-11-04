@@ -1,0 +1,33 @@
+# Local tools and credentials
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.lic
+*.key
+*.pem
+
+# Newly generated executable artifacts and waveforms
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+*.elf
+*.bit
+*.bitstream
+*.vcd
+*.fst
+*.log
+*.rar
+*.zip
+/_local/
+/build-output/
+/dist/
+
+# Historical build/ directories contain source snapshots and stay tracked.
+# Model .bin files and required .mem/.hex initialization inputs stay tracked.

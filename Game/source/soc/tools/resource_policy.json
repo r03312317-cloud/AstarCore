@@ -1,0 +1,21 @@
+{
+  "user_requested_date": "2026-10-13",
+  "cpu_percent": 25,
+  "logical_processor_limit": 8,
+  "memory_limit_gib": 16,
+  "reserve_free_memory_gib": 0,
+  "start_free_memory_gib": 2,
+  "memory_pressure_grace_seconds": 10,
+  "pds_threads": 3,
+  "wsl_memory_gib": 8,
+  "wsl_processors": 4,
+  "wsl_swap_gib": 2,
+  "parallel_heavy_jobs": 1,
+  "priority": "below_normal",
+  "scope": "Managed Windows task tree; WSL VM has its own global configuration. Other applications are not capped or terminated.",
+  "latest_memory_authorization": "2026-10-13: user explicitly allowed more routing memory and a smaller system reserve. Set whole Windows tree commit cap to 16 GiB, free physical/commit reserve to 4 GiB and startup free physical/commit threshold to 12 GiB. CPU, grace period and WSL limits remain unchanged.",
+  "latest_startup_authorization": "2026-10-15: user explicitly requested changing the startup free physical/commit gate from 12 GiB to 2 GiB. Runtime 4 GiB reserve for 10 seconds, 16 GiB task memory cap, CPU and WSL limits remain unchanged.",
+  "latest_reserve_authorization": "2026-10-23: latest explicit user instruction: \u73b0\u5728\u4e0d\u8bbe\u7f6e\u4fdd\u62a4\u7ebf. Disable runtime free physical/commit reserve termination by setting both reserve floors to zero. Supersedes the earlier 4 GiB and 1 GiB runtime floors. Startup gate 2 GiB; whole-tree commit cap 16 GiB; CPU 25%, 8 logical processors; WSL limits; single-heavy-task lease and manual cancellation are unchanged. The grace-period field remains 10 seconds but a nonnegative free-memory observation cannot trigger the disabled reserve rule. temporary_reserve_override is historical.",
+  "temporary_reserve_override": "2026-10-23 02:05: uart_boot_04 build finished; reserve restored to 4 GiB.",
+  "latest_startup_gate_authorization": "2026-10-25: temporary 0.5 GiB startup gate used for the rv32_soc_Game build with the user's explicit approval; RESTORED to 2 GiB after the Game builds finished. All other limits (25% CPU, 8 logical processors, 16 GiB task commit cap, single heavy task, PDS 2 threads because PDS only accepts 1/2/4/8/16/32, runtime reserve floors 0) unchanged."
+}

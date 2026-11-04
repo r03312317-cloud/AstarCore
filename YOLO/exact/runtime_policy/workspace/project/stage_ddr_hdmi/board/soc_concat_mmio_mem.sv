@@ -1,0 +1,99 @@
+`timescale 1ns/1ps
+// CPU reaches these DDR UI registers through the existing pg_mmio_cdc.
+// Extends the existing Concat register bank through0x60001440. Its original
+// addresses/ID remain. One engine and one native port serve all four modes.
+module soc_concat_mmio_mem(
+    input logic clk,rst,ddr_ready,axi_poisoned,
+    input logic req_valid,output logic req_ready,
+    input logic [15:0] req_addr,input logic req_write,
+    input logic [31:0] req_wdata,input logic [3:0] req_wstrb,
+    output logic rsp_valid,input logic rsp_ready,
+    output logic [31:0] rsp_rdata,output logic rsp_error,
+    output logic engine_start,engine_cancel,input logic engine_ready,engine_done,
+    input logic [7:0] engine_error,input logic engine_partial,
+    input logic [31:0] engine_read_bytes,engine_write_bytes,
+    input logic [31:0] engine_active_cycles,engine_stall_cycles,
+    output logic [31:0] input_base,aux_base,output_base,pixels,
+    output logic [15:0] input_channels,aux_channels,
+    output logic [1:0] operation,
+    output logic [15:0] image_h,image_w,
+    output logic irq_level
+);
+    localparam logic [31:0] ID=32'h3154_4143; // CAT1
+    logic busy_q,done_q,partial_q,rejected_q,irq_enable_q;
+    logic [7:0] error_q;
+    wire hit=req_addr>=16'h0400 && req_addr<=16'h0440 && req_addr[1:0]==0;
+    assign req_ready=!rst && !rsp_valid;
+    assign irq_level=done_q && irq_enable_q;
+    always_ff @(posedge clk)begin
+        engine_start<=0;
+        engine_cancel<=0;
+        if(rst)begin
+            rsp_valid<=0;rsp_rdata<=0;rsp_error<=0;
+            busy_q<=0;done_q<=0;partial_q<=0;rejected_q<=0;irq_enable_q<=0;error_q<=0;
+            input_base<=0;aux_base<=0;output_base<=0;pixels<=0;
+            input_channels<=0;aux_channels<=0;
+            operation<=0;image_h<=0;image_w<=0;
+        end else begin
+            if(engine_done)begin
+                busy_q<=0;done_q<=1;error_q<=engine_error;partial_q<=engine_partial;
+            end
+            if(rsp_valid && rsp_ready)rsp_valid<=0;
+            if(req_valid && req_ready)begin
+                rsp_valid<=1;rsp_rdata<=0;rsp_error<=0;
+                if(!hit || (req_write && req_wstrb!=4'hf))begin
+                    rsp_error<=1;rejected_q<=1;
+                end else if(req_write)begin
+                    if(busy_q && req_addr==16'h0400 && req_wdata==2)begin
+                        // Cancel requests drain an already-held request and
+                        // real response inside the engine. Busy is retained.
+                        engine_cancel<=1;
+                    end else if(busy_q)begin rsp_error<=1;rejected_q<=1;end
+                    else case(req_addr)
+                        16'h0400:if(req_wdata!=1 || !engine_ready ||
+                                     !ddr_ready || axi_poisoned)begin
+                            rsp_error<=1;rejected_q<=1;
+                        end else begin
+                            engine_start<=1;busy_q<=1;done_q<=0;
+                            error_q<=0;partial_q<=0;rejected_q<=0;
+                        end
+                        16'h0404:input_base<=req_wdata;
+                        16'h0408:aux_base<=req_wdata;
+                        16'h040c:output_base<=req_wdata;
+                        16'h0410:pixels<=req_wdata;
+                        16'h0414:{aux_channels,input_channels}<=req_wdata;
+                        16'h0418:if(req_wdata<=1)irq_enable_q<=req_wdata[0];
+                            else begin rsp_error<=1;rejected_q<=1;end
+                        16'h0430:if(req_wdata==1)begin
+                            done_q<=0;partial_q<=0;error_q<=0;rejected_q<=0;
+                        end else begin rsp_error<=1;rejected_q<=1;end
+                        16'h0438:if(req_wdata<=3)operation<=req_wdata[1:0];
+                            else begin rsp_error<=1;rejected_q<=1;end
+                        16'h043c:{image_h,image_w}<=req_wdata;
+                        default:begin rsp_error<=1;rejected_q<=1;end
+                    endcase
+                end else case(req_addr)
+                    16'h0400:rsp_rdata<=0;
+                    16'h0404:rsp_rdata<=input_base;
+                    16'h0408:rsp_rdata<=aux_base;
+                    16'h040c:rsp_rdata<=output_base;
+                    16'h0410:rsp_rdata<=pixels;
+                    16'h0414:rsp_rdata<={aux_channels,input_channels};
+                    16'h0418:rsp_rdata<={31'd0,irq_enable_q};
+                    16'h041c:rsp_rdata<={14'd0,engine_ready,axi_poisoned,ddr_ready,
+                        rejected_q,partial_q,error_q,3'd0,done_q,busy_q};
+                    16'h0420:rsp_rdata<=engine_read_bytes;
+                    16'h0424:rsp_rdata<=engine_write_bytes;
+                    16'h0428:rsp_rdata<=engine_active_cycles;
+                    16'h042c:rsp_rdata<=engine_stall_cycles;
+                    16'h0430:rsp_rdata<=0;
+                    16'h0434:rsp_rdata<=ID;
+                    16'h0438:rsp_rdata<={30'd0,operation};
+                    16'h043c:rsp_rdata<={image_h,image_w};
+                    16'h0440:rsp_rdata<=32'h31534e54; // TNS1
+                    default:begin rsp_error<=1;rejected_q<=1;end
+                endcase
+            end
+        end
+    end
+endmodule

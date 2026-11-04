@@ -1,0 +1,61 @@
+// 设备树描述固件传给 Linux 的硬件事实，属性不是运行时频率测量。
+// software_current 中的 board27 源来自实际上传 DTB，CPU 和 UART 配置为 27 MHz。
+// software_reference 中的旧 DTS 保留原貌，不作为本次实板的实际配置依据。
+// memory 与 reserved-memory 的范围共同决定 Linux 可分配内存，不能只看 DDR 芯片总量。
+/dts-v1/;
+/ {
+ // compatible 匹配板级或外设驱动，字符串需要与内核驱动的 of match 表一致。
+ compatible = "rv32,rv32-linux-gui";
+ // model 保留原 DTB 的历史平台名称；其中 simulation 字样是字符串，不改变实板运行来源。
+ model = "RV32 RV32 Linux GUI experimental simulation platform";
+ // #address-cells 定义当前总线地址用几个 32 位单元表示，影响子节点 reg 的解释。
+ #address-cells = <1>; #size-cells = <1>;
+ aliases { serial0 = &uart0; };
+ chosen { stdout-path = "serial0:115200n8"; bootargs = "console=ttyAS0,115200 earlycon=rv32,0x10000000 rdinit=/init loglevel=7"; };
+ memory@80000000 { device_type = "memory"; reg = <0x80000000 0x04000000>; };
+ reserved-memory {
+  #address-cells = <1>; #size-cells = <1>; ranges;
+  /* OpenSBI inserts exact firmware reservations into the handed-off DTB. */
+  fbmem: framebuffer@83f00000 { reg = <0x83f00000 0x00100000>; no-map; };
+ };
+ cpus {
+  #address-cells = <1>; #size-cells = <0>; timebase-frequency = <1000000>;
+  cpu0: cpu@0 {
+   device_type = "cpu"; reg = <0>; status = "okay";
+   compatible = "riscv"; riscv,isa = "rv32ima_zicsr_zifencei";
+   // mmu-type 声明 Sv32 虚拟内存模型，Linux 据此使用两级页表。
+   mmu-type = "riscv,sv32"; clock-frequency = <100000000>;
+   cpu0_intc: interrupt-controller { #interrupt-cells = <1>; interrupt-controller; compatible = "riscv,cpu-intc"; };
+  };
+ };
+ soc {
+  compatible = "simple-bus"; #address-cells = <1>; #size-cells = <1>; ranges;
+  clint@2000000 {
+   compatible = "riscv,clint0"; reg = <0x02000000 0x10000>;
+   // interrupts-extended 成对列出目标中断控制器与中断号，把本地或外部中断接到正确上下文。
+   interrupts-extended = <&cpu0_intc 3 &cpu0_intc 7>;
+  };
+  plic: interrupt-controller@c000000 {
+   compatible = "sifive,plic-1.0.0", "riscv,plic0";
+   // reg 原始单元为 0x0c000000 0x00400000；按父节点的 address cells 与 size cells 分解地址及范围。
+   reg = <0x0c000000 0x00400000>; #interrupt-cells = <1>;
+   interrupt-controller; riscv,ndev = <2>;
+   interrupts-extended = <&cpu0_intc 11 &cpu0_intc 9>;
+  };
+  uart0: serial@10000000 {
+   compatible = "rv32,uart-v1"; reg = <0x10000000 0x100>;
+   // clock-frequency 描述输入时钟配置值，不是运行过程中测量得到的频率。
+   clock-frequency = <100000000>; current-speed = <115200>;
+   // interrupt-parent 引用中断所属控制器，引用号须和 phandle 对应。
+   interrupt-parent = <&plic>; interrupts = <1>;
+  };
+  framebuffer@10001000 {
+   compatible = "rv32,framebuffer-v1"; reg = <0x10001000 0x100>;
+   // memory-region 引用 framebuffer 专用保留显存，防止普通页面分配覆盖显示数据。
+   memory-region = <&fbmem>; width = <640>; height = <360>; stride = <1280>;
+   interrupt-parent = <&plic>; interrupts = <2>;
+   // status 决定内核是否启用该节点；实际上板 framebuffer 采用 okay，旧参考仍保留原状态。
+   status = "disabled"; /* enable only when the scanout DMA is integrated */
+  };
+ };
+};

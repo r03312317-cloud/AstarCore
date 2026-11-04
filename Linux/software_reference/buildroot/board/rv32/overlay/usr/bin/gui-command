@@ -1,0 +1,4 @@
+#!/bin/sh
+case "$1" in home|status|settings|next|quit) ;; *) echo "Usage: gui-command {home|status|settings|next|quit}"; exit 2;; esac
+[ -p /run/rv32-gui/commands ] || { echo 'GUI is not running'; exit 1; }
+printf '%s\n' "$1" > /run/rv32-gui/commands

@@ -1,0 +1,131 @@
+{
+  "origin_archive": "D:\\workspace\\riscv-fpga-soc\\deliverables\\rv32_soc_PAL_V01_BOARD_DIAGNOSTIC_20261102_211811_760613.zip",
+  "origin_archive_sha256": "7e5b134c0e2b0d55af1584d57afe46ca507eae0d75b5f007a83c1d522057f0e2",
+  "files": {
+    "game_board_top.sbit": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/generate_bitstream/game_board_top.sbit",
+      "sha256": "4d9712422b90649c03fa76c4f179aa85ab6aa5512303f59b5fa59da484f4c0ab",
+      "bytes": 9188552
+    },
+    "stage2.bin": {
+      "source_member": "rv32_soc_PAL_V01/build/stage2_20261102_202623_541807/stage2.bin",
+      "sha256": "db48c225e6734cf2f7c86725517b4df3b5d697f00f4deb3dfc9d69a89966c554",
+      "bytes": 924
+    },
+    "qualification_origin.json": {
+      "source_member": "rv32_soc_PAL_V01/build/bringup/board_20261102_202728_177856/qualification.json",
+      "sha256": "2fd4e5712e7ae270f38a6ef07605eeeb2dac207baad2d328453f75c5f0a99f7f",
+      "bytes": 2517
+    },
+    "loader_source_sha256.json": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source_sha256.json",
+      "sha256": "558b3ee1387a5e861fad75e5010e4109e999a31a15c93305d08470e69ac3caa2",
+      "bytes": 10632
+    },
+    "pds.log": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/pds.log",
+      "sha256": "4e95926969d493d7cf0a2275b30085eb1b532966352b1c7289f306b48dd05bc2",
+      "bytes": 3607245
+    },
+    "loader-game-itcm.mem": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/game-itcm.mem",
+      "sha256": "bd6c7b2e860ff817e221a47b84cc8f0bde6c628762a51ad5c5c13376c522a87b",
+      "bytes": 147456
+    },
+    "loader-game-dtcm.mem": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/game-dtcm.mem",
+      "sha256": "ffdfc31199912a0873ffa20cc010ad163af88d2b84fcda8a35c2bb17f4e53ee8",
+      "bytes": 147456
+    },
+    "timing/check_timing_summary.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/check_timing_summary.db",
+      "sha256": "999ea96f534dfad91e77bc1e0961f2e93d20b2b47a31cb2815bf573cb7413a67",
+      "bytes": 21095
+    },
+    "timing/report_timing_clock_summary.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_clock_summary.db",
+      "sha256": "a758a1121e350893def1003be2d214c7e752819f4f3afbc0ecee9940542da001",
+      "bytes": 5774
+    },
+    "timing/report_timing_fast_hold.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_fast_hold.db",
+      "sha256": "f389fbe06ec2de9a599d4240bc94aa0f5a0ddaa57be360d66606a30b780e3631",
+      "bytes": 3232
+    },
+    "timing/report_timing_fast_mpw.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_fast_mpw.db",
+      "sha256": "286de94c981ed044fd870b3d0d170a02bf0f7cab55e66dd891ebafd747da4d5f",
+      "bytes": 2525
+    },
+    "timing/report_timing_fast_recovery.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_fast_recovery.db",
+      "sha256": "ea29e6f61cef0216ff38389df200c575592d5e664c27c9cb9af5d735bbc3de39",
+      "bytes": 1852
+    },
+    "timing/report_timing_fast_removal.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_fast_removal.db",
+      "sha256": "9314700c9baaee5d4c94296fd39f9317e475bd958e5c5be47673f78badd12ebd",
+      "bytes": 1383
+    },
+    "timing/report_timing_fast_setup.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_fast_setup.db",
+      "sha256": "9f3613d1301033fdc61ec802fef38b16740a8332f0ee117dfbf42efbf42d2dd9",
+      "bytes": 4619
+    },
+    "timing/report_timing_fast_skew.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_fast_skew.db",
+      "sha256": "27da5c08b05066bd712479df0dd84d2bb6f6e70394d3c986971d2649924715c1",
+      "bytes": 1394
+    },
+    "timing/report_timing_fmax.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_fmax.db",
+      "sha256": "c474175227f0c9ea75a0a27eb6f778d7d7d758d99248f0679834a85e74bdcdac",
+      "bytes": 1594
+    },
+    "timing/report_timing_messages.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_messages.db",
+      "sha256": "240c14325b3d3383728274ed54b2f5450f6beece5e3896c79ae28252b278a285",
+      "bytes": 19001
+    },
+    "timing/report_timing_runtime.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_runtime.db",
+      "sha256": "adfbed86f59d5cc34c101985e8ad62bea18f93af953f4164870a3aff7c68fdf3",
+      "bytes": 799
+    },
+    "timing/report_timing_settings.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_settings.db",
+      "sha256": "336b7f672f51c826cb6abe0dba10e5b22d3612472ad94e513fb3c8e84911fd0b",
+      "bytes": 3933
+    },
+    "timing/report_timing_slow_hold.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_slow_hold.db",
+      "sha256": "ab1bc9c7417065e1e1a3b82a885bb17457d4bc6923efb643afada057795f22a8",
+      "bytes": 3232
+    },
+    "timing/report_timing_slow_mpw.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_slow_mpw.db",
+      "sha256": "305a231fb6aa4e3c434e9035c1a2f1a15b7c099dbe397507c12b7c7e87f3ef77",
+      "bytes": 2525
+    },
+    "timing/report_timing_slow_recovery.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_slow_recovery.db",
+      "sha256": "d6367ec08ff90edcbab7941a96ac6062d5f18741920d83dd1aa2f374b1e2b3cd",
+      "bytes": 1852
+    },
+    "timing/report_timing_slow_removal.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_slow_removal.db",
+      "sha256": "06ed9502ae8965f1833702b614ce361d88a1c52da82945a84aa3bb1a7613438d",
+      "bytes": 1383
+    },
+    "timing/report_timing_slow_setup.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_slow_setup.db",
+      "sha256": "fea7b93561897fd46bba1a321b93dad1d876a6b7c08630412db984c3a1acd1bf",
+      "bytes": 4619
+    },
+    "timing/report_timing_slow_skew.db": {
+      "source_member": "rv32_soc_PAL_V01/build/loader_20261102_175527_126979/source/build/pds/run_20261102_175528/prj_tasks/pnr_1/report_timing/report_db/report_timing_slow_skew.db",
+      "sha256": "057fa5bfd9e6fa84d34ae8b446802ac6544a87f72c3d5970b39c3cd20aa2b4e4",
+      "bytes": 1394
+    }
+  }
+}

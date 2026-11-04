@@ -1,0 +1,39 @@
+#!/bin/sh
+# Boot-stage service for the upstream psplash adapted to RV32 fbdev.
+pidfile=/run/rv32-psplash.pid
+is_splash() {
+  [ -r "$pidfile" ] || return 1
+  pid=$(cat "$pidfile")
+  case "$pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$pid/cmdline")" in
+    *'/usr/bin/psplash -n '*) kill -0 "$pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+case "${1:-}" in
+ start)
+  if is_splash; then exit 0; fi
+  mkdir -p /run /var/log
+  if [ -p /run/psplash_fifo ]; then rm -f /run/psplash_fifo; fi
+  /usr/bin/psplash -n >>/var/log/rv32-psplash.log 2>&1 </dev/null &
+  pid=$!
+  printf '%s\n' "$pid" > "$pidfile"
+  n=0
+  while [ "$n" -lt 20 ]; do
+    [ -p /run/psplash_fifo ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+    n=$((n+1))
+  done
+  if [ -p /run/psplash_fifo ]; then
+    /usr/bin/psplash-write "MSG Starting Linux $(uname -r)" || true
+  fi
+  ;;
+ stop)
+  if is_splash; then
+    /usr/bin/psplash-write QUIT || kill "$pid" 2>/dev/null || true
+  fi
+  ;;
+ *) echo "Usage: $0 {start|stop}"; exit 2;;
+esac

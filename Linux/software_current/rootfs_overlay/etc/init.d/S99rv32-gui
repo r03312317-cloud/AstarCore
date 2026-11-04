@@ -1,0 +1,78 @@
+#!/bin/sh
+# 用户空间启动脚本先结束 psplash，再启动真实的 LVGL fbdev 应用。
+# GUI 使用 /dev/fb0，并通过私有 FIFO 接收页面命令，串口仍留给 getty 和 shell。
+# 本脚本负责启动服务，不把预录 uname 或系统状态当作程序实时采样。
+# Start the real LVGL application and retain its diagnostics in /var/log.
+pidfile=/run/rv32-gui.pid
+fifo=/run/rv32-gui/commands
+# 先核对 PID 对应的 proc cmdline，避免 PID 已复用时误认其他进程为 GUI。
+is_gui() {
+  [ -r "$pidfile" ] || return 1
+  pid=$(cat "$pidfile")
+  case "$pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$pid/cmdline")" in
+    *'/usr/bin/rv32-gui '*) kill -0 "$pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+# 启动页进程身份由 PID 与真实命令行共同判断，不能只检查 PID 文件存在。
+is_splash() {
+  [ -r /run/rv32-psplash.pid ] || return 1
+  splash_pid=$(cat /run/rv32-psplash.pid)
+  case "$splash_pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$splash_pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$splash_pid/cmdline")" in
+    *'/usr/bin/psplash -n '*) kill -0 "$splash_pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+# 先请求 psplash 正常退出并有界等待，必要时才终止经过身份确认的旧进程。
+stop_splash() {
+  if ! is_splash; then return 0; fi
+  # 通过 psplash 自身 FIFO 请求退出，避免两个进程同时认为自己拥有活动页。
+  /usr/bin/psplash-write QUIT || true
+  n=0
+  # 有界等待真实进程退出，未退出则继续保留显示所有者判定。
+  while is_splash && [ "$n" -lt 60 ]; do
+    sleep 0.5
+    n=$((n+1))
+  done
+  # 只有身份匹配的 splash 才走控制路径，不向任意 PID 发送退出请求。
+  if is_splash; then
+    echo "Splash did not exit; requesting termination" >&2
+    kill "$splash_pid" 2>/dev/null || true
+    n=0
+    while is_splash && [ "$n" -lt 20 ]; do
+      sleep 0.1
+      n=$((n+1))
+    done
+  fi
+  if is_splash; then
+    echo "Splash still owns the display; refusing to start GUI" >&2
+    return 1
+  fi
+  return 0
+}
+case "${1:-}" in
+ # 进入本服务的启动分支，资源检查与重复启动处理以本分支原代码为准。
+ start)
+  mkdir -p /run/rv32-gui
+  chmod 700 /run/rv32-gui
+  if is_gui; then exit 0; fi
+  # Wait for the splash process to release the double-buffered display.
+  # 只有旧启动页释放显示所有权，才允许 LVGL 接管双缓冲 framebuffer。
+  stop_splash || exit 1
+  rm -f "$pidfile" "$fifo"
+  # 在板上后台运行 LVGL 应用，stdin 重定向到空设备，保留 UART 供 getty 和 shell。
+  /usr/bin/rv32-gui --fb /dev/fb0 >>/var/log/rv32-gui.log 2>&1 </dev/null &
+  # 保存刚创建的本服务子进程 PID，后续还需要核对 cmdline 才能发送信号。
+  printf '%s\n' "$!" > "$pidfile"
+  ;;
+ # 进入本服务的停止分支，只收束该服务自身持有的进程或状态。
+ stop)
+  if is_gui; then kill "$pid"; fi
+  rm -f "$pidfile"
+  ;;
+ *) echo "Usage: $0 {start|stop}"; exit 2;;
+esac

@@ -1,0 +1,15 @@
+{
+  "kind": "annotated_tested_source_and_evidence",
+  "main_source_files": 80,
+  "main_source_comment_percent": 29.78,
+  "excluded_package_paths": [
+    "fpga_prepare_*",
+    "__pycache__",
+    "*.pyc"
+  ],
+  "linux_upstream_original_archive_included": false,
+  "bitstream_included": false,
+  "runtime_images_included": false,
+  "new_board_test": false,
+  "hardware_access": false
+}

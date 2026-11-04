@@ -1,0 +1,2 @@
+rv32 login:	root\n
+# 	uname -a; cat /proc/cpuinfo; echo RV32_TERMINAL_CHECK\n

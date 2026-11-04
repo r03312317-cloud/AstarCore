@@ -1,0 +1,81 @@
+#!/bin/sh
+# 手动启动的 Linux 后台计数程序，值和运行状态写入 /run/rv32-demo 供 GUI 读取。
+# start 在后台进程真正调度前先发布零值；重复启动先检查 PID 与真实 cmdline。
+# worker 通过 sleep 1 循环递增，节拍受 Linux 调度影响，未宣称独立时钟精度。
+# 每次先写临时文件再重命名，避免 GUI 读到半条计数字符串。
+# stop 只向经过身份检查的进程发送信号，并有界等待退出。
+# 不安装 cron 或系统定时任务，只有用户明确调用 start 后才运行此普通进程。
+# Manually started demo process; no cron or scheduled automation is used.
+set -u
+base=${RV32_DEMO_DIR:-/run/rv32-demo}
+self=${RV32_COUNTER_EXEC:-/usr/bin/rv32-counter}
+pidfile="$base/counter.pid"
+valuefile="$base/counter"
+running="$base/running"
+
+# 读取 PID 后还检查 proc 中的真实命令行，避免对已经复用该 PID 的无关进程发送信号。
+our_process() {
+  [ -r "$pidfile" ] || return 1
+  pid=$(cat "$pidfile")
+  case "$pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$pid/cmdline")" in
+    *"$self --worker"*) kill -0 "$pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+
+case "${1:-}" in
+  # 后台 worker 只负责递增与状态发布，启动和停止管理留在其他命令分支。
+  --worker)
+    mkdir -p "$base"
+    # 信号清理只移除本计数程序的状态标记，让 GUI 能在下一次采样显示停止。
+    trap 'rm -f "$running" "$pidfile"; exit 0' TERM INT HUP
+    printf '%s\n' "$$" > "$pidfile"
+    count=0
+    printf '%s\n' "$count" > "$valuefile"
+    : > "$running"
+    while :; do
+      # 普通进程在本循环中让出 CPU，约一秒后继续；这不是系统定时任务注册。
+      sleep 1
+      count=$((count + 1))
+      printf '%s\n' "$count" > "$valuefile.tmp"
+      # 通过同目录重命名发布完整计数值，GUI 不会读到尚未写完的临时内容。
+      mv "$valuefile.tmp" "$valuefile"
+    done
+    ;;
+  # 重复启动先检查已有 worker，确认未运行后才创建新的后台计数进程。
+  start)
+    mkdir -p "$base"
+    if our_process; then echo 'Counter already running'; exit 0; fi
+    rm -f "$pidfile" "$running"
+    # Publish an initial value before launching the worker. On a slow FPGA
+    # Linux system the background shell may not get CPU time immediately.
+    printf '0\n' > "$valuefile.tmp"
+    mv "$valuefile.tmp" "$valuefile"
+    "$self" --worker >/dev/null 2>&1 &
+    # 保存刚创建的本服务子进程 PID，后续还需要核对 cmdline 才能发送信号。
+    printf '%s\n' "$!" > "$pidfile"
+    echo 'Counter starting'
+    ;;
+  # 停止目标必须经过身份验证；超时仍未退出时返回错误而不是伪报停止。
+  stop)
+    if ! our_process; then rm -f "$running" "$pidfile"; echo 'Counter already stopped'; exit 0; fi
+    # 只对前面验证过的本程序 PID 发送终止信号。
+    kill "$pid"
+    tries=0
+    while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 4 ]; do
+      sleep 1
+      tries=$((tries + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then echo 'Counter did not stop'; exit 1; fi
+    rm -f "$running" "$pidfile"
+    echo 'Counter stopped'
+    ;;
+  # 状态查询直接查看板上进程及计数文件，查询动作本身不启动新的计数器。
+  status)
+    if our_process; then echo "Counter running: $(cat "$valuefile" 2>/dev/null || echo 0)";
+    else echo "Counter stopped: $(cat "$valuefile" 2>/dev/null || echo 0)"; fi
+    ;;
+  *) echo 'Usage: rv32-counter {start|stop|status}'; exit 2;;
+esac

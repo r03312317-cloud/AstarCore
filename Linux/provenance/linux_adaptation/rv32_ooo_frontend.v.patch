@@ -1,0 +1,131 @@
+--- Core01/rv32_ooo_frontend.v
++++ Core01Linux/rv32_ooo_frontend.v
+@@ -16,13 +16,14 @@
+     output [31:0] imem_request_address,
+     input imem_response_valid, output imem_response_ready,
+     input [63:0] imem_response_data, input [1:0] imem_response_error,
++    input [1:0] imem_response_page_fault,
+     input redirect, input [31:0] redirect_address,
+     input maintenance_redirect,
+     input [1:0] pop_count,
+     output reg [3:0] queue_count,
+     output [31:0] instruction0, instruction1,
+     output [31:0] pc0, pc1, prediction0, prediction1,
+-    output error0, error1,
++    output error0, error1, output page_fault0,page_fault1,
+     output illegal0, illegal1,
+     output source_used10,source_used20,source_used11,source_used21,
+     output serial0,serial1,complex0,complex1,
+@@ -67,7 +68,7 @@
+         end
+     endfunction
+     (* syn_ramstyle="distributed_ram" *) reg [HISTORY_BITS+1:0] qc_even[0:3],qc_odd[0:3];
+-    reg queue_error [0:7];
++    reg queue_error [0:7]; reg queue_page_fault[0:7];
+     reg queue_illegal[0:7];
+     reg [1:0] queue_source_use[0:7];
+     function [1:0] classify_sources;
+@@ -76,9 +77,9 @@
+         reg [2:0] sub;
+         begin
+             op=insn[6:0];sub=insn[14:12];
+-            classify_sources[0]=(op==103||op==99||op==3||op==35||op==19||op==51||
++            classify_sources[0]=(op==47||op==103||op==99||op==3||op==35||op==19||op==51||
+                 (op==115&&sub!=0&&!sub[2]));
+-            classify_sources[1]=(op==99||op==35||(op==51&&
++            classify_sources[1]=((op==47&&insn[31:27]!=2)||op==99||op==35||(op==51&&
+                 !(insn[31:25]==4&&sub==4&&insn[24:20]==0)));
+         end
+     endfunction
+@@ -86,18 +87,19 @@
+     reg queue_pc_dispatch_ok[0:7],queue_prediction_sequential[0:7];
+     function dispatch_pc_usable;
+         input [31:0] location;
+-        begin dispatch_pc_usable=location[1:0]==0&&(location[31:28]==1||location[31:28]==8);end
++        begin dispatch_pc_usable=location[1:0]==0;end
+     endfunction
+     function classify_serial;
+         input [31:0] insn;
+         begin
+             classify_serial=0;
+             case(insn[6:0])
++                7'b0101111:classify_serial=1;
+                 7'b0001111:classify_serial=insn[14:12]==0||insn[14:12]==1||insn==32'h0000500f;
+                 7'b1110011:begin
+                     if(insn[14:12]!=0)classify_serial=1;
+                     else case(insn)
+-                        32'h00000073,32'h00100073,32'h30200073,32'h10500073:classify_serial=1;
++                        32'h00000073,32'h00100073,32'h30200073,32'h10200073,32'h10500073:classify_serial=1;
+                         default:classify_serial=(insn&32'hfe007fff)==32'h12000073;
+                     endcase
+                 end
+@@ -136,6 +138,8 @@
+     assign illegal0=queue_illegal[queue_head];
+     assign illegal1=queue_illegal[second_index];
+     assign error0=queue_error[queue_head];
++    assign page_fault0=queue_page_fault[queue_head];
++    assign page_fault1=queue_page_fault[second_index];
+     assign error1=queue_error[second_index];
+     assign serial0=queue_serial[queue_head];
+     assign serial1=queue_serial[second_index];
+@@ -684,8 +688,8 @@
+                 queue_head<=queue_head+{1'b0,pop_count};
+                 queue_tail<=queue_tail+{1'b0,push_count};
+                 queue_count<=projected_count[3:0];
+-                if(push_count!=0)queue_error[queue_tail]<=imem_response_error[0];
+-                if(push_count==2)queue_error[pair_tail]<=imem_response_error[1];
++                if(push_count!=0)begin queue_error[queue_tail]<=imem_response_error[0];queue_page_fault[queue_tail]<=imem_response_page_fault[0];end
++                if(push_count==2)begin queue_error[pair_tail]<=imem_response_error[1];queue_page_fault[pair_tail]<=imem_response_page_fault[1];end
+                 if(local_correction)begin
+                     fetch_epoch<=!fetch_epoch;
+                 end
+@@ -766,13 +770,14 @@
+     output [31:0] imem_request_address,
+     input imem_response_valid, output imem_response_ready,
+     input [63:0] imem_response_data, input [1:0] imem_response_error,
++    input [1:0] imem_response_page_fault,
+     input redirect, input [31:0] redirect_address,
+     input maintenance_redirect,
+     input [1:0] pop_count,
+     output reg [3:0] queue_count,
+     output [31:0] instruction0, instruction1,
+     output [31:0] pc0, pc1, prediction0, prediction1,
+-    output error0, error1,
++    output error0, error1, output page_fault0,page_fault1,
+     input train0, train1,
+     input [31:0] train_pc0, train_pc1, train_next0, train_next1,
+     input train_conditional0, train_conditional1,
+@@ -791,7 +796,7 @@
+         input [2:0] tag;
+         begin read_queue_prediction=tag[0]?qn_odd[tag[2:1]]:qn_even[tag[2:1]];end
+     endfunction
+-    reg queue_error [0:7];
++    reg queue_error [0:7]; reg queue_page_fault[0:7];
+     reg [2:0] queue_head, queue_tail;
+     wire [2:0] second_index=queue_head+3'd1;
+     // Head and successor address opposite banks. Express one read address
+@@ -807,6 +812,8 @@
+     assign pc0=head_pc;
+     assign pc1=prediction0;
+     assign error0=queue_error[queue_head];
++    assign page_fault0=queue_page_fault[queue_head];
++    assign page_fault1=queue_page_fault[second_index];
+     assign error1=queue_error[second_index];
+ 
+     // Tagged 64-entry direction/target table. Conditional misses use static
+@@ -949,13 +956,13 @@
+                     
+                     
+                     
+-                    queue_error[queue_tail]<=imem_response_error[0];
++                    queue_error[queue_tail]<=imem_response_error[0];queue_page_fault[queue_tail]<=imem_response_page_fault[0];
+                 end
+                 if(push_count==2) begin
+                     
+                     
+                     
+-                    queue_error[queue_tail+3'd1]<=imem_response_error[1];
++                    queue_error[queue_tail+3'd1]<=imem_response_error[1];queue_page_fault[queue_tail+3'd1]<=imem_response_page_fault[1];
+                 end
+                 if(response_current) fetch_cursor<=response_next;
+             end

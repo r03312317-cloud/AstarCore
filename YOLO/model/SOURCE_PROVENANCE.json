@@ -1,0 +1,19 @@
+{
+  "model_file": "best_raw_heads_int8.onnx",
+  "model_sha256": "97da0db6ca09dfc726b6bb41e93cc9a5c7f0f4690f46502d43eb467f803b8a52",
+  "framework": "Ultralytics YOLOv5",
+  "framework_license_observed": "AGPL-3.0",
+  "export_source_sha256": {
+    "models/yolo.py": "01d1256b245bde0632399d27045c2f1d41961bf3e5c7a9b792f798888cd2c800",
+    "models/experimental.py": "8423b61af8c4e2535583e0c5125e9cdeeea50a1e066950af2d0f3a9013a92d72",
+    "models/common.py": "2abfe1e06c996c45f7805b7ecbe813d3dcbff883df003ca32583f7e01aba663e",
+    "utils/augmentations.py": "20bfd70476e6b81a3e13532971d11c3d6b6c53954c3a300c3e3356d6c86706d4",
+    "utils/torch_utils.py": "607d06f6d4e2d8964fa54693c5d5f1dcc9d8f0146e25d462fe7163fcd442df63"
+  },
+  "source_hashes_match_export_record": true,
+  "framework_immutable_revision": null,
+  "training_recipe_included": false,
+  "training_data_authorization_record_included": false,
+  "model_mit_grant": false,
+  "numeric_initializers_unchanged": true
+}

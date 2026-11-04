@@ -1,0 +1,48 @@
+#!/bin/sh
+# 此启动脚本在 Linux 用户空间启动早期图形画面，使用上游 psplash 的平台适配版。
+# 启动图是 RV32 主题，不代表运行了 Ubuntu 桌面或采用某发行版官方默认主题。
+# Boot-stage service for the upstream psplash adapted to RV32 fbdev.
+pidfile=/run/rv32-psplash.pid
+# 启动页进程身份由 PID 与真实命令行共同判断，不能只检查 PID 文件存在。
+is_splash() {
+  [ -r "$pidfile" ] || return 1
+  pid=$(cat "$pidfile")
+  case "$pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$pid/cmdline")" in
+    *'/usr/bin/psplash -n '*) kill -0 "$pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+case "${1:-}" in
+ # 进入本服务的启动分支，资源检查与重复启动处理以本分支原代码为准。
+ start)
+  # 只有身份匹配的 splash 才走控制路径，不向任意 PID 发送退出请求。
+  if is_splash; then exit 0; fi
+  mkdir -p /run /var/log
+  if [ -p /run/psplash_fifo ]; then rm -f /run/psplash_fifo; fi
+  # 在板上 Linux 运行上游 psplash 适配版，日志写入本系统 var log。
+  /usr/bin/psplash -n >>/var/log/rv32-psplash.log 2>&1 </dev/null &
+  pid=$!
+  printf '%s\n' "$pid" > "$pidfile"
+  n=0
+  while [ "$n" -lt 20 ]; do
+    [ -p /run/psplash_fifo ] && break
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+    n=$((n+1))
+  done
+  if [ -p /run/psplash_fifo ]; then
+    # 启动画面的内核版本字符串来自现场 uname，不能把固定标签当成实时内核身份。
+    /usr/bin/psplash-write "MSG Starting Linux $(uname -r)" || true
+  fi
+  ;;
+ # 进入本服务的停止分支，只收束该服务自身持有的进程或状态。
+ stop)
+  if is_splash; then
+    # 通过 psplash 自身 FIFO 请求退出，避免两个进程同时认为自己拥有活动页。
+    /usr/bin/psplash-write QUIT || kill "$pid" 2>/dev/null || true
+  fi
+  ;;
+ *) echo "Usage: $0 {start|stop}"; exit 2;;
+esac

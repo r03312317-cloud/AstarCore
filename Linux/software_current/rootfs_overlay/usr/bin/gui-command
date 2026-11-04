@@ -1,0 +1,10 @@
+#!/bin/sh
+# 此命令将 home status next 或 quit 写入 GUI 私有 FIFO，实现 UART shell 到 HDMI 的切页。
+# 命令在 FPGA Linux 内执行，主机不绘制页面，也不向显示器发送静态演示图片。
+# 独立 FIFO 让 GUI 与交互 shell 分别持有自己的输入渠道，不争用标准输入。
+case "$1" in
+  home|status|next|quit) ;;
+  *) echo 'Usage: gui-command {home|status|next|quit}'; exit 2 ;;
+esac
+[ -p /run/rv32-gui/commands ] || { echo 'GUI is not running'; exit 1; }
+printf '%s\n' "$1" > /run/rv32-gui/commands

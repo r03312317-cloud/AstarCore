@@ -1,0 +1,17 @@
+rtl/rv32_address_classify.v
+rtl/rv32_arithmetic.v
+rtl/rv32_committed_ras.v
+rtl/rv32_execute.v
+rtl/rv32_hybrid_predictor.v
+rtl/rv32_instruction_flags.v
+rtl/rv32_issue_bank.v
+rtl/rv32_issue_payload_mux.v
+rtl/rv32_issue_scheduler.v
+rtl/rv32_jalr_target_match.v
+rtl/rv32_memory_system.v
+rtl/rv32_mul_stream.v
+rtl/rv32_ooo_core.v
+rtl/rv32_ooo_frontend.v
+rtl/rv32_ooo_soc_top.v
+rtl/rv32_queue_allocator.v
+rtl/rv32_unaligned_adapter.v

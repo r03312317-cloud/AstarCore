@@ -1,0 +1,65 @@
+#!/bin/sh
+# Manually started demo process; no cron or scheduled automation is used.
+set -u
+base=${RV32_DEMO_DIR:-/run/rv32-demo}
+self=${RV32_COUNTER_EXEC:-/usr/bin/rv32-counter}
+pidfile="$base/counter.pid"
+valuefile="$base/counter"
+running="$base/running"
+
+our_process() {
+  [ -r "$pidfile" ] || return 1
+  pid=$(cat "$pidfile")
+  case "$pid" in ''|*[!0-9]*) return 1;; esac
+  [ -r "/proc/$pid/cmdline" ] || return 1
+  case "$(tr '\000' ' ' < "/proc/$pid/cmdline")" in
+    *"$self --worker"*) kill -0 "$pid" 2>/dev/null;;
+    *) return 1;;
+  esac
+}
+
+case "${1:-}" in
+  --worker)
+    mkdir -p "$base"
+    trap 'rm -f "$running" "$pidfile"; exit 0' TERM INT HUP
+    printf '%s\n' "$$" > "$pidfile"
+    count=0
+    printf '%s\n' "$count" > "$valuefile"
+    : > "$running"
+    while :; do
+      sleep 1
+      count=$((count + 1))
+      printf '%s\n' "$count" > "$valuefile.tmp"
+      mv "$valuefile.tmp" "$valuefile"
+    done
+    ;;
+  start)
+    mkdir -p "$base"
+    if our_process; then echo 'Counter already running'; exit 0; fi
+    rm -f "$pidfile" "$running"
+    # Publish an initial value before launching the worker. On a slow FPGA
+    # Linux system the background shell may not get CPU time immediately.
+    printf '0\n' > "$valuefile.tmp"
+    mv "$valuefile.tmp" "$valuefile"
+    "$self" --worker >/dev/null 2>&1 &
+    printf '%s\n' "$!" > "$pidfile"
+    echo 'Counter starting'
+    ;;
+  stop)
+    if ! our_process; then rm -f "$running" "$pidfile"; echo 'Counter already stopped'; exit 0; fi
+    kill "$pid"
+    tries=0
+    while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 4 ]; do
+      sleep 1
+      tries=$((tries + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then echo 'Counter did not stop'; exit 1; fi
+    rm -f "$running" "$pidfile"
+    echo 'Counter stopped'
+    ;;
+  status)
+    if our_process; then echo "Counter running: $(cat "$valuefile" 2>/dev/null || echo 0)";
+    else echo "Counter stopped: $(cat "$valuefile" 2>/dev/null || echo 0)"; fi
+    ;;
+  *) echo 'Usage: rv32-counter {start|stop|status}'; exit 2;;
+esac

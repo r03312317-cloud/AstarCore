@@ -1,0 +1,73 @@
+#!/bin/sh
+# 此脚本保留本工程使用的原始启动或构建流程，具体路径和参数没有在注释版中改变。
+
+DAEMON="syslogd"
+PIDFILE="/var/run/$DAEMON.pid"
+
+SYSLOGD_ARGS=""
+
+# shellcheck source=/dev/null
+[ -r "/etc/default/$DAEMON" ] && . "/etc/default/$DAEMON"
+
+# BusyBox' syslogd does not create a pidfile, so pass "-n" in the command line
+# and use "--make-pidfile" to instruct start-stop-daemon to create one.
+start() {
+	# CONFIG_NET=n excludes AF_UNIX even on a machine with no network device.
+	# Do not confuse successful background launch with a functioning logger.
+	if [ ! -r /proc/net/unix ]; then
+		echo "Starting syslogd: SKIP (AF_UNIX unavailable; /proc/net/unix absent)"
+		return 0
+	fi
+	printf 'Starting %s: ' "$DAEMON"
+	# shellcheck disable=SC2086 # we need the word splitting
+	start-stop-daemon --start --background --make-pidfile \
+		--pidfile "$PIDFILE" --exec "/sbin/$DAEMON" \
+		-- -n $SYSLOGD_ARGS
+	status=$?
+	if [ "$status" -eq 0 ]; then
+		echo "OK"
+	else
+		echo "FAIL"
+	fi
+	return "$status"
+}
+
+stop() {
+	printf 'Stopping %s: ' "$DAEMON"
+	start-stop-daemon --stop --pidfile "$PIDFILE" --exec "/sbin/$DAEMON"
+	status=$?
+	if [ "$status" -eq 0 ]; then
+		echo "OK"
+	else
+		echo "FAIL"
+		return "$status"
+	fi
+	while start-stop-daemon --stop --test --quiet --pidfile "$PIDFILE" \
+		--exec "/sbin/$DAEMON"; do
+		sleep 0.1
+	done
+	rm -f "$PIDFILE"
+	return "$status"
+}
+
+restart() {
+	# CONFIG_NET=n excludes AF_UNIX even on a machine with no network device.
+	# Do not confuse successful background launch with a functioning logger.
+	if [ ! -r /proc/net/unix ]; then
+		echo "Starting syslogd: SKIP (AF_UNIX unavailable; /proc/net/unix absent)"
+		return 0
+	fi
+	stop
+	start
+}
+
+case "$1" in
+	start|stop|restart)
+		"$1";;
+	reload)
+		# Restart, since there is no true "reload" feature.
+		restart;;
+	*)
+		echo "Usage: $0 {start|stop|restart|reload}"
+		exit 1
+esac

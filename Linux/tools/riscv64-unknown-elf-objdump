@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec riscv32-unknown-elf-objdump "$@"

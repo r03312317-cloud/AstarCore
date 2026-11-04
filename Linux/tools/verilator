@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export VERILATOR_ROOT="${RV32_VERILATOR_ROOT:-/home/user/codex_k7_verilator_548/verilator}"
+exec "$VERILATOR_ROOT/bin/verilator" --assert --unroll-count 1024 --unroll-stmts 100000 "$@"
